@@ -151,10 +151,8 @@ def main():
         commit_message="chore: update model card",
     )
 
-    # 3. Upload artifacts folder (models + scalers + results JSONs)
-    #    Skip figures and logs — only model-relevant files
-    IGNORE = ["*.png", "*.jpg", "*.pdf", "*.log", "*.txt", "*.md"]
-
+    # 3. Upload artifacts folder (models + scalers + results + figures + reports)
+    #    Only skip logs — everything else (including figures/reports) is preserved on HF Hub
     for version in ["v1", "v2"]:
         version_path = ARTIFACTS / version
         if not version_path.exists():
@@ -168,11 +166,11 @@ def main():
             repo_id=REPO_ID,
             repo_type=REPO_TYPE,
             token=HF_TOKEN,
-            ignore_patterns=["figures/**", "logs/**", "*.png", "*.jpg", "*.pdf", "*.log"],
-            commit_message=f"feat: upload {version} model artifacts",
+            ignore_patterns=["logs/**", "*.log"],
+            commit_message=f"feat: upload {version} model artifacts (incl. figures & reports)",
             run_as_future=False,
         )
-        print(f"  ✓ artifacts/{version} uploaded")
+        print(f"  [OK] artifacts/{version} uploaded")
 
     print("\n✅ All artifacts uploaded to", f"https://huggingface.co/{REPO_ID}")
 
