@@ -1,0 +1,55 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# Binary artifacts — figures, notebooks, numpy arrays (too large / not needed)
+# ─────────────────────────────────────────────────────────────────────────────
+artifacts/v1/figures/
+artifacts/v2/figures/
+artifacts/v2/reports/
+artifacts/v2/results/*.npz
+artifacts/v2/results/*.png
+notebooks/
+# ─────────────────────────────────────────────────────────────────────────────
+# Model artifacts — stored on HF Hub, NOT in git
+# Download via: python scripts/download_models.py
+# or automatically on Docker startup
+# ─────────────────────────────────────────────────────────────────────────────
+artifacts/v1/models/
+artifacts/v2/models/
+artifacts/v1/scalers/
+artifacts/v2/scalers/
+# Sentinel written by download_models.py
+artifacts/.hf_downloaded
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+venv/
+.venv/
+.idea/
+*.egg-info/
+
+# Frontend
+frontend/node_modules/
+frontend/dist/
+node_modules/
+# Root package-lock is a dev workspace artifact — not needed in repo
+/package-lock.json
+# Do NOT ignore frontend/package-lock.json — Docker needs it for npm ci
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Runtime logs (persist locally but not in repo)
+artifacts/logs/
+
+# Env / OS
+.env
+.DS_Store
+Thumbs.db
+
+# Raw dataset — too large for git; re-download from NASA PCoE or use DVC
+cleaned_dataset/data/
+cleaned_dataset/extra_infos/
+
+# Reference notebooks (not our work)
+reference/

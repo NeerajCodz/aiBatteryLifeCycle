@@ -1,0 +1,90 @@
+"""
+Download model artifacts from Hugging Face Hub at container startup.
+
+Called automatically by the Docker entrypoint before uvicorn starts.
+Downloads only if artifacts are missing (idempotent — skips already-present files).
+"""
+
+import os
+import sys
+from pathlib import Path
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Config
+# ──────────────────────────────────────────────────────────────────────────────
+REPO_ID   = "NeerajCodz/aiBatteryLifeCycle"
+REPO_TYPE = "model"
+# Token read from the HF_TOKEN Space Secret (set in Space Settings → Secrets)
+# For local use: set HF_TOKEN in your shell or .env before running
+HF_TOKEN  = os.getenv("HF_TOKEN", "")
+
+# Download into the repo-root artifacts/ directory
+DEST_DIR  = Path(__file__).resolve().parent.parent / "artifacts"
+
+# Sentinel file — if this exists we already downloaded successfully
+SENTINEL  = DEST_DIR / ".hf_downloaded"
+
+# ──────────────────────────────────────────────────────────────────────────────
+
+
+def already_downloaded() -> bool:
+    """Return True only when all three BestEnsemble component models are present.
+
+    These three are required for ML simulation to work.  Any other models are
+    optional bonuses, but if these three are absent the Container must download.
+    """
+    required = [
+        DEST_DIR / "v2" / "models" / "classical" / "random_forest.joblib",
+        DEST_DIR / "v2" / "models" / "classical" / "xgboost.joblib",
+        DEST_DIR / "v2" / "models" / "classical" / "lightgbm.joblib",
+    ]
+    missing = [p for p in required if not p.exists()]
+    if missing:
+        if SENTINEL.exists():
+            SENTINEL.unlink()   # stale sentinel — remove so next run re-downloads
+            print(f"[download_models] Sentinel was stale ({len(missing)} key models missing) — will re-download")
+        return False
+    return True
+
+
+def download_artifacts() -> None:
+    try:
+        from huggingface_hub import snapshot_download
+    except ImportError:
+        print("[download_models] huggingface_hub not installed — installing now…")
+        import subprocess
+        subprocess.check_call([sys.executable, "-m", "pip", "install", "huggingface_hub>=0.23", "-q"])
+        from huggingface_hub import snapshot_download
+
+    DEST_DIR.mkdir(parents=True, exist_ok=True)
+
+    print(f"[download_models] Downloading from {REPO_ID} → {DEST_DIR}")
+
+    # Repo is public — only pass token when non-empty.
+    # Passing an empty string causes a 401 even on public repos.
+    kwargs: dict = dict(
+        repo_id=REPO_ID,
+        repo_type=REPO_TYPE,
+        local_dir=str(DEST_DIR),
+        ignore_patterns=["*.png", "*.jpg", "*.pdf", "*.log", "figures/**"],
+    )
+    if HF_TOKEN:
+        kwargs["token"] = HF_TOKEN
+
+    snapshot_download(**kwargs)
+
+    # Write sentinel
+    SENTINEL.write_text("downloaded\n")
+    print("[download_models] ✅ Artifacts ready")
+
+
+def main():
+    if already_downloaded():
+        print("[download_models] Artifacts already present — skipping download")
+        return
+
+    download_artifacts()
+
+
+if __name__ == "__main__":
+    main()

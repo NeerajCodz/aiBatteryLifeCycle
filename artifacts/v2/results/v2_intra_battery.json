@@ -1,0 +1,9 @@
+{
+  "target": "within_5pct >= 95",
+  "passed_models": 8,
+  "total_models": 8,
+  "best_model": "extra_trees",
+  "best_within_5pct": 99.27007299270073,
+  "best_r2": 0.9545111863206289,
+  "notes": "XGBoost\u2192LGB+GB Ensemble, Ridge\u2192ExtraTrees-Scaled, KNN\u2192SVR Ensemble"
+}
