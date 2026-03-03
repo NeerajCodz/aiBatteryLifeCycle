@@ -2,7 +2,20 @@
 Download model artifacts from Hugging Face Hub at container startup.
 
 Called automatically by the Docker entrypoint before uvicorn starts.
-Downloads only if artifacts are missing (idempotent — skips already-present files).
+Can also download a specific version on-demand (e.g. from the API).
+
+HF model repo layout  (v1/ and v2/ at repo root):
+    v1/models/classical/*.joblib
+    v1/models/deep/*.pt  *.keras
+    v1/scalers/*.joblib
+    v2/models/classical/*.joblib
+    v2/models/deep/*.pt  *.keras
+    v2/scalers/*.joblib
+    v2/results/*.json
+
+Local layout after download  (local_dir = ARTIFACTS_DIR):
+    artifacts/v1/...
+    artifacts/v2/...
 """
 
 import os
@@ -14,83 +27,111 @@ from pathlib import Path
 # ──────────────────────────────────────────────────────────────────────────────
 REPO_ID   = "NeerajCodz/aiBatteryLifeCycle"
 REPO_TYPE = "model"
-# Token read from the HF_TOKEN Space Secret (set in Space Settings → Secrets)
+# Token read from the HF_TOKEN Space Secret (set in Space Settings -> Secrets)
 # For local use: set HF_TOKEN in your shell or .env before running
 HF_TOKEN  = os.getenv("HF_TOKEN", "")
 
-# Project root — snapshot_download uses this as local_dir so that files stored
-# at "artifacts/v1/..." in the HF repo land at <PROJECT_ROOT>/artifacts/v1/...
-# (NOT at <PROJECT_ROOT>/artifacts/artifacts/v1/... which would happen if we
-# pointed local_dir at the artifacts/ subfolder directly).
-PROJECT_ROOT = Path(__file__).resolve().parent.parent   # /app  (or repo root locally)
-ARTIFACTS_DIR = PROJECT_ROOT / "artifacts"
+# HF repo stores v1/ and v2/ at root → local_dir=ARTIFACTS_DIR maps them to
+#   artifacts/v1/...  and  artifacts/v2/...
+ARTIFACTS_DIR = Path(__file__).resolve().parent.parent / "artifacts"
 
-# Sentinel file — written after a successful download
+# Sentinel file — written after a successful full download
 SENTINEL = ARTIFACTS_DIR / ".hf_downloaded"
 
 # ──────────────────────────────────────────────────────────────────────────────
 
 
-def already_downloaded() -> bool:
-    """Return True only when all three BestEnsemble component models are present.
+def _hf_kwargs(allow_patterns: list | None = None,
+               ignore_patterns: list | None = None) -> dict:
+    """Build kwargs for snapshot_download; inject token only when non-empty."""
+    kwargs: dict = dict(
+        repo_id=REPO_ID,
+        repo_type=REPO_TYPE,
+        local_dir=str(ARTIFACTS_DIR),
+    )
+    if allow_patterns:
+        kwargs["allow_patterns"] = allow_patterns
+    if ignore_patterns:
+        kwargs["ignore_patterns"] = ignore_patterns
+    if HF_TOKEN:
+        kwargs["token"] = HF_TOKEN
+    return kwargs
 
-    These three are required for ML simulation to work.  Any other models are
-    optional bonuses, but if these three are absent the Container must download.
-    """
-    required = [
-        ARTIFACTS_DIR / "v2" / "models" / "classical" / "random_forest.joblib",
-        ARTIFACTS_DIR / "v2" / "models" / "classical" / "xgboost.joblib",
-        ARTIFACTS_DIR / "v2" / "models" / "classical" / "lightgbm.joblib",
-    ]
-    missing = [p for p in required if not p.exists()]
+
+def _key_models(version: str = "v2") -> list:
+    base = ARTIFACTS_DIR / version / "models" / "classical"
+    return [base / f"{m}.joblib" for m in ("random_forest", "xgboost", "lightgbm")]
+
+
+def version_loaded(version: str) -> bool:
+    """Return True when the given version's key models exist on disk."""
+    return all(p.exists() for p in _key_models(version))
+
+
+def already_downloaded(version: str = "v2") -> bool:
+    """Return True only when all three BestEnsemble component models are present."""
+    missing = [p for p in _key_models(version) if not p.exists()]
     if missing:
         if SENTINEL.exists():
-            SENTINEL.unlink()   # stale sentinel — remove so next run re-downloads
-            print(f"[download_models] Sentinel was stale ({len(missing)} key models missing) — will re-download")
+            SENTINEL.unlink()
+            print(f"[download_models] Sentinel stale ({len(missing)} key models missing) — will re-download")
         return False
     return True
 
 
-def download_artifacts() -> None:
+def _ensure_hub():
     try:
-        from huggingface_hub import snapshot_download
+        from huggingface_hub import snapshot_download  # noqa: F401
     except ImportError:
-        print("[download_models] huggingface_hub not installed — installing now…")
         import subprocess
-        subprocess.check_call([sys.executable, "-m", "pip", "install", "huggingface_hub>=0.23", "-q"])
-        from huggingface_hub import snapshot_download
+        subprocess.check_call([sys.executable, "-m", "pip", "install",
+                               "huggingface_hub>=0.23", "-q"])
 
+
+def download_version(version: str) -> None:
+    """Download a single version (e.g. 'v1' or 'v2') from HF Hub into artifacts/."""
+    _ensure_hub()
+    from huggingface_hub import snapshot_download
     ARTIFACTS_DIR.mkdir(parents=True, exist_ok=True)
+    print(f"[download_models] Downloading {version}/ from {REPO_ID} -> {ARTIFACTS_DIR}")
+    snapshot_download(**_hf_kwargs(
+        allow_patterns=[f"{version}/**"],
+        ignore_patterns=["*.log"],
+    ))
+    print(f"[download_models] {version}/ ready")
 
-    print(f"[download_models] Downloading from {REPO_ID} → {ARTIFACTS_DIR}")
 
-    # Repo is public — only pass token when non-empty.
-    # Passing an empty string causes a 401 even on public repos.
-    # IMPORTANT: local_dir must be PROJECT_ROOT (not artifacts/) because the HF
-    # repo stores files under "artifacts/v1/..." — pointing local_dir at the
-    # project root makes them land at <root>/artifacts/v1/... as expected.
-    kwargs: dict = dict(
-        repo_id=REPO_ID,
-        repo_type=REPO_TYPE,
-        local_dir=str(PROJECT_ROOT),
-        ignore_patterns=["*.png", "*.jpg", "*.pdf", "*.log", "figures/**"],
-    )
-    if HF_TOKEN:
-        kwargs["token"] = HF_TOKEN
-
-    snapshot_download(**kwargs)
-
-    # Write sentinel
+def download_all() -> None:
+    """Download all versions (v1 + v2) from HF Hub."""
+    _ensure_hub()
+    from huggingface_hub import snapshot_download
+    ARTIFACTS_DIR.mkdir(parents=True, exist_ok=True)
+    print(f"[download_models] Downloading all versions from {REPO_ID} -> {ARTIFACTS_DIR}")
+    snapshot_download(**_hf_kwargs(ignore_patterns=["*.log"]))
     SENTINEL.write_text("downloaded\n")
-    print("[download_models] ✅ Artifacts ready")
+    print("[download_models] Artifacts ready")
 
 
-def main():
-    if already_downloaded():
+def main() -> None:
+    import argparse
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--version", default=None,
+                        help="Download only this version, e.g. v1 or v2")
+    args = parser.parse_args()
+
+    if args.version:
+        if version_loaded(args.version):
+            print(f"[download_models] {args.version} already present — skipping")
+        else:
+            download_version(args.version)
+        return
+
+    # Default: ensure v2 (latest) is present
+    if already_downloaded("v2"):
         print("[download_models] Artifacts already present — skipping download")
         return
 
-    download_artifacts()
+    download_all()
 
 
 if __name__ == "__main__":

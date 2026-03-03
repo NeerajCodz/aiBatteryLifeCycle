@@ -151,28 +151,42 @@ def main():
         commit_message="chore: update model card",
     )
 
-    # 3. Upload artifacts folder (models + scalers + results + figures + reports)
-    #    Only skip logs — everything else (including figures/reports) is preserved on HF Hub
+    # 3. Upload each version directly at repo root: v1/ and v2/ (NOT under artifacts/)
+    #    This keeps the HF model repo clean — download_models.py maps them back into
+    #    the local artifacts/ folder via local_dir=ARTIFACTS_DIR.
     for version in ["v1", "v2"]:
         version_path = ARTIFACTS / version
         if not version_path.exists():
             print(f"  [skip] {version_path} does not exist")
             continue
 
-        print(f"\nUploading artifacts/{version}/ …")
+        print(f"\nUploading {version}/ at repo root …")
         upload_folder(
             folder_path=str(version_path),
-            path_in_repo=f"artifacts/{version}",
+            path_in_repo=version,          # v1/ or v2/ at repo root
             repo_id=REPO_ID,
             repo_type=REPO_TYPE,
             token=HF_TOKEN,
             ignore_patterns=["logs/**", "*.log"],
-            commit_message=f"feat: upload {version} model artifacts (incl. figures & reports)",
+            commit_message=f"feat: upload {version} artifacts at repo root",
             run_as_future=False,
         )
-        print(f"  [OK] artifacts/{version} uploaded")
+        print(f"  [OK] {version}/ uploaded")
 
-    print("\n✅ All artifacts uploaded to", f"https://huggingface.co/{REPO_ID}")
+    # 4. Remove old artifacts/ tree that may exist from previous uploads
+    print("\nCleaning up legacy artifacts/ folder in HF repo (if any) …")
+    try:
+        api.delete_folder(
+            path_in_repo="artifacts",
+            repo_id=REPO_ID,
+            repo_type=REPO_TYPE,
+            commit_message="chore: remove legacy artifacts/ folder (moved to repo root)",
+        )
+        print("  [OK] artifacts/ removed")
+    except Exception as e:
+        print(f"  [skip] No legacy artifacts/ to remove ({e})")
+
+    print("\n[OK] All artifacts uploaded to", f"https://huggingface.co/{REPO_ID}")
 
 
 if __name__ == "__main__":

@@ -66,6 +66,21 @@ export interface ModelVersionGroups {
   default_model: string | null;
 }
 
+// ── Version management ───────────────────────────────────────────────────────
+export interface VersionInfo {
+  id: string;            // "v1" | "v2"
+  display: string;       // "Version 1" | "Version 2"
+  loaded: boolean;
+  model_count: number;
+  status: "ready" | "not_downloaded" | "downloading" | "error";
+}
+
+export const fetchVersions = () =>
+  baseApi.get<VersionInfo[]>("/versions").then((r) => r.data);
+
+export const loadVersion = (version: string) =>
+  baseApi.post<{ status: string; version: string }>(`/versions/${version}/load`).then((r) => r.data);
+
 export interface BatteryVizData {
   battery_id: string;
   soh_pct: number;

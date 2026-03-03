@@ -5,6 +5,7 @@ import GraphPanel from "./components/GraphPanel";
 import RecommendationPanel from "./components/RecommendationPanel";
 import MetricsPanel from "./components/MetricsPanel";
 import ResearchPaper from "./components/ResearchPaper";
+import VersionSelector from "./components/VersionSelector";
 import { ToastProvider } from "./components/Toast";
 import { getApiVersion, setApiVersion } from "./api";
 import { BatteryCharging } from "lucide-react";
@@ -42,24 +43,11 @@ export default function App() {
             <h1 className="text-lg font-bold">AI Battery Lifecycle Predictor</h1>
           </div>
           <div className="flex items-center gap-4">
-            {/* Version toggle */}
-            <div className="flex items-center gap-2 bg-gray-800 rounded-lg p-1">
-              {(["v1", "v2"] as const).map((v) => (
-                <button
-                  key={v}
-                  onClick={() => handleVersionChange(v)}
-                  className={`px-3 py-1 rounded text-xs font-bold transition-colors ${
-                    apiVersion === v
-                      ? v === "v2"
-                        ? "bg-green-600 text-white"
-                        : "bg-blue-600 text-white"
-                      : "text-gray-400 hover:text-white"
-                  }`}
-                >
-                  {v.toUpperCase()}
-                </button>
-              ))}
-            </div>
+            {/* Version selector with submenu */}
+            <VersionSelector
+              activeVersion={apiVersion}
+              onSwitch={handleVersionChange}
+            />
             <nav className="flex gap-1">
             {tabs.map((t) => (
               <button

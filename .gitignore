@@ -1,23 +1,8 @@
 # ─────────────────────────────────────────────────────────────────────────────
-# Binary artifacts — figures, notebooks, numpy arrays (too large / not needed)
+# Entire artifacts/ lives on HF Hub model repo (NeerajCodz/aiBatteryLifeCycle)
+# Downloaded at Docker startup via scripts/download_models.py
 # ─────────────────────────────────────────────────────────────────────────────
-artifacts/v1/figures/
-artifacts/v2/figures/
-artifacts/v2/reports/
-artifacts/v2/results/*.npz
-artifacts/v2/results/*.png
-notebooks/
-# ─────────────────────────────────────────────────────────────────────────────
-# Model artifacts — stored on HF Hub, NOT in git
-# Download via: python scripts/download_models.py
-# or automatically on Docker startup
-# ─────────────────────────────────────────────────────────────────────────────
-artifacts/v1/models/
-artifacts/v2/models/
-artifacts/v1/scalers/
-artifacts/v2/scalers/
-# Sentinel written by download_models.py
-artifacts/.hf_downloaded
+artifacts/
 
 # Python
 __pycache__/

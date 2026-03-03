@@ -42,10 +42,11 @@ Docker
 
 from __future__ import annotations
 
+import asyncio
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import FastAPI
+from fastapi import BackgroundTasks, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
@@ -108,6 +109,68 @@ async def health():
         models_loaded=registry_v1.model_count + registry_v2.model_count,
         device=registry.device,
     )
+
+
+# ── Version management ───────────────────────────────────────────────────────
+_REGISTRIES = {"v1": registry_v1, "v2": registry_v2}
+_version_status: dict[str, str] = {}   # "downloading" | "ready" | "error"
+
+
+def _artifacts_dir() -> Path:
+    return Path(__file__).resolve().parent.parent / "artifacts"
+
+
+def _version_loaded(version: str) -> bool:
+    base = _artifacts_dir() / version / "models" / "classical"
+    return any(base.glob("*.joblib")) if base.exists() else False
+
+
+@app.get("/api/versions", tags=["meta"])
+async def list_versions():
+    """Return all known versions with loaded / downloading status."""
+    return [
+        {
+            "id": v,
+            "display": f"Version {v[1]}",
+            "loaded": _version_loaded(v),
+            "model_count": _REGISTRIES[v].model_count,
+            "status": _version_status.get(v, "ready" if _version_loaded(v) else "not_downloaded"),
+        }
+        for v in ["v2", "v1"]
+    ]
+
+
+async def _bg_load_version(version: str) -> None:
+    import subprocess, sys as _sys
+    try:
+        proc = await asyncio.create_subprocess_exec(
+            _sys.executable, "scripts/download_models.py", "--version", version,
+            stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.STDOUT,
+        )
+        await proc.wait()
+        if proc.returncode == 0:
+            _REGISTRIES[version].load_all()
+            _version_status[version] = "ready"
+            log.info("Version %s loaded on demand — %d models", version,
+                     _REGISTRIES[version].model_count)
+        else:
+            _version_status[version] = "error"
+            log.error("download_models.py failed for version %s", version)
+    except Exception as exc:
+        _version_status[version] = "error"
+        log.error("Failed to load version %s: %s", version, exc)
+
+
+@app.post("/api/versions/{version}/load", tags=["meta"])
+async def load_version(version: str, background_tasks: BackgroundTasks):
+    """Download + activate a model version from HF Hub (runs in background)."""
+    if version not in _REGISTRIES:
+        raise HTTPException(status_code=400, detail=f"Unknown version '{version}'")
+    if _version_status.get(version) == "downloading":
+        return {"status": "downloading", "version": version}
+    _version_status[version] = "downloading"
+    background_tasks.add_task(_bg_load_version, version)
+    return {"status": "downloading", "version": version}
 
 
 # ── Include routers ──────────────────────────────────────────────────────────

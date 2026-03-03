@@ -43,12 +43,11 @@ RUN mkdir -p artifacts/v1/models/classical artifacts/v1/models/deep \
              artifacts/v2/scalers artifacts/v2/results artifacts/v2/reports \
              artifacts/logs
 
-# Copy project source
+# Copy project source (artifacts/ is NOT in git — downloaded at runtime)
 COPY src/ src/
 COPY api/ api/
 COPY scripts/ scripts/
 COPY cleaned_dataset/ cleaned_dataset/
-COPY artifacts/ artifacts/
 
 # Copy built frontend
 COPY --from=frontend-build /app/frontend/dist frontend/dist
