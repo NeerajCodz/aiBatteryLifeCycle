@@ -1,4 +1,4 @@
-# Same patterns as .gitignore — keep uploads lean
+﻿# Keep HF Space lean — models/data live elsewhere
 __pycache__/
 *.pyc
 *.pyo
@@ -7,28 +7,33 @@ venv/
 .idea/
 *.egg-info/
 
-# Frontend dev dependencies (only dist is needed)
+# Frontend dev dependencies (only dist/ is needed)
 frontend/node_modules/
 node_modules/
 package-lock.json
 
-# Jupyter checkpoints
+# Jupyter
 .ipynb_checkpoints/
+notebooks/
 
-# Runtime logs
+# Logs
 artifacts/logs/
+
+# Artifacts — stored on HF model repo (NeerajCodz/aiBatteryLifeCycle)
+# Downloaded at container startup via scripts/download_models.py
+artifacts/
 
 # Env / OS
 .env
 .DS_Store
 Thumbs.db
 
-# Raw dataset — too large
+# Raw dataset
 cleaned_dataset/data/
 cleaned_dataset/extra_infos/
 
 # Reference notebooks
 reference/
 
-# Git internals (never needed in HF)
+# Git internals
 .git/

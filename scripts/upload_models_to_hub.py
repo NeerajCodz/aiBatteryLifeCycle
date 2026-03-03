@@ -142,7 +142,7 @@ def main():
     )
 
     # 2. Upload model card
-    print("Uploading README / model card…")
+    print("Uploading README / model card...")
     api.upload_file(
         path_or_fileobj=MODEL_CARD.encode(),
         path_in_repo="README.md",
@@ -152,29 +152,54 @@ def main():
     )
 
     # 3. Upload each version directly at repo root: v1/ and v2/ (NOT under artifacts/)
-    #    This keeps the HF model repo clean — download_models.py maps them back into
-    #    the local artifacts/ folder via local_dir=ARTIFACTS_DIR.
+    #    Split into one commit per subdirectory so no single commit is too large
+    #    (the 100 MB random_forest.joblib would time out a combined commit).
     for version in ["v1", "v2"]:
         version_path = ARTIFACTS / version
         if not version_path.exists():
             print(f"  [skip] {version_path} does not exist")
             continue
 
-        print(f"\nUploading {version}/ at repo root …")
-        upload_folder(
-            folder_path=str(version_path),
-            path_in_repo=version,          # v1/ or v2/ at repo root
-            repo_id=REPO_ID,
-            repo_type=REPO_TYPE,
-            token=HF_TOKEN,
-            ignore_patterns=["logs/**", "*.log"],
-            commit_message=f"feat: upload {version} artifacts at repo root",
-            run_as_future=False,
-        )
-        print(f"  [OK] {version}/ uploaded")
+        # Gather all subdirectories that contain files (plus version root files)
+        subdirs = sorted({
+            p.parent
+            for p in version_path.rglob("*")
+            if p.is_file()
+            and ".log" not in p.suffixes
+            and "__pycache__" not in p.parts
+        })
 
-    # 4. Remove old artifacts/ tree that may exist from previous uploads
-    print("\nCleaning up legacy artifacts/ folder in HF repo (if any) …")
+        for subdir in subdirs:
+            rel = subdir.relative_to(version_path)
+            repo_path = f"{version}/{rel}".rstrip("/.")
+            # Remove trailing /. for version root
+            if repo_path.endswith("/."):
+                repo_path = version
+
+            files_in_sub = [
+                f for f in subdir.iterdir()
+                if f.is_file()
+                and ".log" not in f.suffixes
+                and f.name != ".hf_downloaded"
+            ]
+            if not files_in_sub:
+                continue
+
+            print(f"  Uploading {len(files_in_sub)} file(s) → {repo_path}/")
+            upload_folder(
+                folder_path=str(subdir),
+                path_in_repo=repo_path,
+                repo_id=REPO_ID,
+                repo_type=REPO_TYPE,
+                token=HF_TOKEN,
+                ignore_patterns=["*.log"],
+                commit_message=f"feat: {repo_path}",
+                run_as_future=False,
+            )
+            print(f"    [OK] {repo_path}/")
+
+    # 4. Remove old artifacts/ tree from previous uploads
+    print("\nCleaning up legacy artifacts/ folder in HF repo (if any)...")
     try:
         api.delete_folder(
             path_in_repo="artifacts",
