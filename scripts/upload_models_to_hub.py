@@ -171,10 +171,9 @@ def main():
 
         for subdir in subdirs:
             rel = subdir.relative_to(version_path)
-            repo_path = f"{version}/{rel}".rstrip("/.")
-            # Remove trailing /. for version root
-            if repo_path.endswith("/."):
-                repo_path = version
+            # Use as_posix() to ensure forward slashes on Windows
+            rel_posix = rel.as_posix()
+            repo_path = version if rel_posix == "." else f"{version}/{rel_posix}"
 
             files_in_sub = [
                 f for f in subdir.iterdir()
