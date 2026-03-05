@@ -813,6 +813,14 @@ class ModelRegistry:
         if name is None:
             raise ValueError("No models loaded in registry")
 
+        # Pad X to the model's expected feature count if needed.
+        # This handles v3 models (18 features) when simulate builds X with 12.
+        def _pad_X(X: np.ndarray, model: Any) -> np.ndarray:
+            n_expected = getattr(model, "n_features_in_", None)
+            if n_expected and X.shape[1] < n_expected:
+                return np.pad(X, ((0, 0), (0, n_expected - X.shape[1])))
+            return X
+
         if name == "best_ensemble":
             components = self.model_meta.get("best_ensemble", {}).get(
                 "components", list(_ENSEMBLE_WEIGHTS.keys())
@@ -824,7 +832,7 @@ class ModelRegistry:
                 if cname not in self.models:
                     continue
                 w   = _ENSEMBLE_WEIGHTS.get(cname, 1.0)
-                xi  = self._x_for_model(self.models[cname], X)
+                xi  = self._x_for_model(self.models[cname], _pad_X(X, self.models[cname]))
                 preds = np.asarray(self.models[cname].predict(xi), dtype=float)
                 weighted_sum = preds * w if weighted_sum is None else weighted_sum + preds * w
                 total_w += w
@@ -841,10 +849,11 @@ class ModelRegistry:
                     f"Model '{name}' is a deep sequence model and cannot be "
                     "batch-predicted. Use predict() per sample instead."
                 )
-            elif name in self._LINEAR_FAMILIES:
-                xi = self._scale_for_linear(X)
+            Xp = _pad_X(X, model)
+            if name in self._LINEAR_FAMILIES:
+                xi = self._scale_for_linear(Xp)
             else:
-                xi = self._x_for_model(model, X)
+                xi = self._x_for_model(model, Xp)
             return np.clip(np.asarray(model.predict(xi), dtype=float), 0.0, 100.0), name
 
         else:
@@ -863,13 +872,21 @@ class ModelRegistry:
     def list_models(self) -> list[dict[str, Any]]:
         """Return full model listing with versioning, metrics, and load status."""
         all_metrics = self.get_metrics()
+        # Registry version prefix: "v1" -> "1", "v2" -> "2", "v3" -> "3"
+        reg_major = self.version.lstrip("v")
         out: list[dict[str, Any]] = []
         for name in MODEL_CATALOG:
             catalog = MODEL_CATALOG[name]
             meta = self.model_meta.get(name, {})
+            # Normalize version to registry major (e.g. v3 deep model shows 3.0.0, not 2.4.0)
+            raw_ver = meta.get("version") or catalog.get("version", "?")
+            if raw_ver and raw_ver != "?":
+                ver_major = raw_ver.split(".")[0]
+                if ver_major != reg_major:
+                    raw_ver = f"{reg_major}.0.0"
             out.append({
                 "name":         name,
-                "version":      catalog.get("version", "?"),
+                "version":      raw_ver,
                 "display_name": catalog.get("display_name", name),
                 "family":       catalog.get("family", "unknown"),
                 "algorithm":    catalog.get("algorithm", ""),
