@@ -41,6 +41,9 @@ class FeatureWiseMHA(layers.Layer):
         self.norm = layers.LayerNormalization()
         self.dropout = layers.Dropout(dropout)
 
+    def build(self, input_shape):
+        super().build(input_shape)
+
     def call(self, x, training=False):
         # x: (B, T, F) → transpose to (B, F, T) for feature-wise attention
         x_t = tf.transpose(x, perm=[0, 2, 1])  # (B, F, T)
@@ -61,6 +64,9 @@ class TokenWiseMHA(layers.Layer):
         self.norm = layers.LayerNormalization()
         self.dropout = layers.Dropout(dropout)
 
+    def build(self, input_shape):
+        super().build(input_shape)
+
     def call(self, x, training=False):
         attn = self.mha(x, x, training=training)
         attn = self.dropout(attn, training=training)
@@ -77,6 +83,9 @@ class Conv1DFeedForward(layers.Layer):
         self.conv2 = layers.Conv1D(d_model, kernel_size=1)
         self.norm = layers.LayerNormalization()
         self.dropout = layers.Dropout(dropout)
+
+    def build(self, input_shape):
+        super().build(input_shape)
 
     def call(self, x, training=False):
         ff = self.conv1(x)
@@ -205,6 +214,9 @@ class DynamicGraphConv(layers.Layer):
         super().__init__(**kwargs)
         self.proj = layers.Dense(d_model)
         self.norm = layers.LayerNormalization()
+
+    def build(self, input_shape):
+        super().build(input_shape)
 
     def call(self, x, training=False):
         """

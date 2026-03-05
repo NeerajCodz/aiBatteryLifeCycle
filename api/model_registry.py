@@ -70,6 +70,13 @@ FEATURE_COLS_SCALAR: list[str] = [
     "cycle_duration", "Re", "Rct", "delta_capacity",
 ]
 
+# Columns present in the features CSV that are NOT model inputs
+# (targets, identifiers, or derived columns excluded from training)
+_NON_FEATURE_COLS: frozenset[str] = frozenset({
+    "battery_id", "Capacity", "datetime", "SoH", "RUL",
+    "degradation_state", "soh_rolling_mean",
+})
+
 # ── Model catalog (single source of truth for versions & metadata) ────────────
 MODEL_CATALOG: dict[str, dict[str, Any]] = {
     "random_forest":          {"version": "3.0.0", "display_name": "Random Forest",                  "family": "classical",    "algorithm": "RandomForestRegressor",       "target": "soh", "r2": 0.9814},
@@ -160,6 +167,7 @@ class ModelRegistry:
         self.scaler = None          # kept for backward compat
         self.linear_scaler = None   # StandardScaler for Ridge/Lasso/SVR/KNN
         self.sequence_scaler = None # StandardScaler for sequence deep models
+        self.feature_cols: list[str] = list(FEATURE_COLS_SCALAR)  # updated by load_all
         self.device = "cpu"
         self.version = version
         # Set version-aware paths
@@ -180,6 +188,7 @@ class ModelRegistry:
             return
         self._detect_device()
         self._load_scaler()
+        self.feature_cols = self._load_feature_cols()
         self._load_classical()
         self._load_deep_pytorch()
         self._load_deep_keras()
@@ -232,6 +241,11 @@ class ModelRegistry:
         try:
             import torch
             state = torch.load(p, map_location="cpu", weights_only=True)
+            # TFT-specific check MUST come first: TFT also has lstm.weight_ih_l0
+            # but its LSTM takes d_model (not n_feat) as input, causing wrong detection.
+            # softmax_proj.bias shape is (n_features,) — the true feature count.
+            if "var_selection.softmax_proj.bias" in state:
+                return int(state["var_selection.softmax_proj.bias"].shape[0])
             # LSTM / BiLSTM / GRU: weight_ih_l0 shape is (gates*hidden, n_feat)
             for key in ("lstm.weight_ih_l0", "encoder_lstm.weight_ih_l0", "gru.weight_ih_l0"):
                 if key in state:
@@ -239,9 +253,6 @@ class ModelRegistry:
             # BatteryGPT: input_proj.weight shape is (d_model, n_feat)
             if "input_proj.weight" in state:
                 return int(state["input_proj.weight"].shape[-1])
-            # TFT: softmax_proj.bias shape is (n_features,)
-            if "var_selection.softmax_proj.bias" in state:
-                return int(state["var_selection.softmax_proj.bias"].shape[0])
         except Exception:
             pass
         return _N_FEAT
@@ -437,6 +448,40 @@ class ModelRegistry:
         else:
             log.warning("sequence_scaler.joblib not found — deep models will use raw features")
 
+    def _load_feature_cols(self) -> list[str]:
+        """Discover feature column names from artifacts features CSV.
+
+        Reads the features CSV for this version (if present), drops known
+        non-feature columns (targets, identifiers, derived labels), and
+        validates the count against the loaded scaler's ``n_features_in_``.
+        Falls back to the module-level ``FEATURE_COLS_SCALAR`` list.
+        """
+        features_dir = self._artifacts / "features"
+        for fname in ("battery_features.csv", "train_split.csv"):
+            fpath = features_dir / fname
+            if not fpath.exists():
+                continue
+            try:
+                all_cols = pd.read_csv(fpath, nrows=0).columns.tolist()
+                feat_cols = [c for c in all_cols if c not in _NON_FEATURE_COLS]
+                n_expected = getattr(self.linear_scaler, "n_features_in_", None)
+                if n_expected and len(feat_cols) != n_expected:
+                    log.warning(
+                        "Feature col count mismatch: CSV=%d, scaler=%d — using scaler count",
+                        len(feat_cols), n_expected,
+                    )
+                    feat_cols = feat_cols[:n_expected]
+                if feat_cols:
+                    log.info(
+                        "Feature columns loaded from artifacts (%d cols, source: %s)",
+                        len(feat_cols), fname,
+                    )
+                    return feat_cols
+            except Exception as exc:
+                log.warning("Could not load feature cols from %s: %s", fname, exc)
+        log.info("Using default FEATURE_COLS_SCALAR (%d features)", len(FEATURE_COLS_SCALAR))
+        return list(FEATURE_COLS_SCALAR)
+
     def _choose_default(self) -> None:
         """Select the highest-quality loaded model as the registry default."""
         priority = [
@@ -517,11 +562,12 @@ class ModelRegistry:
     def _build_x(self, features: dict[str, float]) -> np.ndarray:
         """Build raw (1, F) feature numpy array — NO scaling applied here.
 
-        Scaling is applied per-model-family in :meth:`predict` because
-        tree models need no scaling while linear/deep models need different
-        scalers.
+        Uses ``self.feature_cols`` which is populated from the artifacts features
+        CSV at startup, falling back to ``FEATURE_COLS_SCALAR``.  Unknown feature
+        keys (e.g. v3-only engineered features not sent by the frontend) default
+        to 0.0 and are zero-padded by the deep-sequence builders as needed.
         """
-        return np.array([[features.get(c, 0.0) for c in FEATURE_COLS_SCALAR]])
+        return np.array([[features.get(c, 0.0) for c in self.feature_cols]])
 
     @staticmethod
     def _x_for_model(model: Any, x: np.ndarray) -> Any:
