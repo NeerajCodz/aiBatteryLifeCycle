@@ -72,9 +72,9 @@ FEATURE_COLS_SCALAR: list[str] = [
 
 # ── Model catalog (single source of truth for versions & metadata) ────────────
 MODEL_CATALOG: dict[str, dict[str, Any]] = {
-    "random_forest":          {"version": "1.0.0", "display_name": "Random Forest",                  "family": "classical",    "algorithm": "RandomForestRegressor",       "target": "soh", "r2": 0.9567},
-    "xgboost":                {"version": "1.0.0", "display_name": "XGBoost",                        "family": "classical",    "algorithm": "XGBRegressor",                "target": "soh", "r2": 0.928},
-    "lightgbm":               {"version": "1.0.0", "display_name": "LightGBM",                       "family": "classical",    "algorithm": "LGBMRegressor",               "target": "soh", "r2": 0.928},
+    "random_forest":          {"version": "3.0.0", "display_name": "Random Forest",                  "family": "classical",    "algorithm": "RandomForestRegressor",       "target": "soh", "r2": 0.9814},
+    "xgboost":                {"version": "3.0.0", "display_name": "XGBoost",                        "family": "classical",    "algorithm": "XGBRegressor",                "target": "soh", "r2": 0.9866},
+    "lightgbm":               {"version": "3.0.0", "display_name": "LightGBM",                       "family": "classical",    "algorithm": "LGBMRegressor",               "target": "soh", "r2": 0.9826},
     "ridge":                  {"version": "1.0.0", "display_name": "Ridge Regression",               "family": "classical",    "algorithm": "Ridge",                      "target": "soh", "r2": 0.72},
     "svr":                    {"version": "1.0.0", "display_name": "SVR (RBF)",                      "family": "classical",    "algorithm": "SVR",                        "target": "soh", "r2": 0.805},
     "lasso":                  {"version": "1.0.0", "display_name": "Lasso",                          "family": "classical",    "algorithm": "Lasso",                      "target": "soh", "r2": 0.52},
@@ -82,8 +82,8 @@ MODEL_CATALOG: dict[str, dict[str, Any]] = {
     "knn_k5":                 {"version": "1.0.0", "display_name": "KNN (k=5)",                     "family": "classical",    "algorithm": "KNeighborsRegressor",        "target": "soh", "r2": 0.72},
     "knn_k10":                {"version": "1.0.0", "display_name": "KNN (k=10)",                    "family": "classical",    "algorithm": "KNeighborsRegressor",        "target": "soh", "r2": 0.724},
     "knn_k20":                {"version": "1.0.0", "display_name": "KNN (k=20)",                    "family": "classical",    "algorithm": "KNeighborsRegressor",        "target": "soh", "r2": 0.717},
-    "extra_trees":            {"version": "2.0.0", "display_name": "ExtraTrees",                     "family": "classical",    "algorithm": "ExtraTreesRegressor",        "target": "soh", "r2": 0.967},
-    "gradient_boosting":      {"version": "2.0.0", "display_name": "GradientBoosting",               "family": "classical",    "algorithm": "GradientBoostingRegressor",  "target": "soh", "r2": 0.934},
+    "extra_trees":            {"version": "3.0.0", "display_name": "ExtraTrees",                     "family": "classical",    "algorithm": "ExtraTreesRegressor",        "target": "soh", "r2": 0.9701},
+    "gradient_boosting":      {"version": "3.0.0", "display_name": "GradientBoosting",               "family": "classical",    "algorithm": "GradientBoostingRegressor",  "target": "soh", "r2": 0.9860},
     "vanilla_lstm":           {"version": "2.0.0", "display_name": "Vanilla LSTM",                   "family": "deep_pytorch", "algorithm": "VanillaLSTM",                "target": "soh", "r2": 0.507},
     "bidirectional_lstm":     {"version": "2.0.0", "display_name": "Bidirectional LSTM",             "family": "deep_pytorch", "algorithm": "BidirectionalLSTM",          "target": "soh", "r2": 0.520},
     "gru":                    {"version": "2.0.0", "display_name": "GRU",                            "family": "deep_pytorch", "algorithm": "GRUModel",                   "target": "soh", "r2": 0.510},
@@ -94,16 +94,16 @@ MODEL_CATALOG: dict[str, dict[str, Any]] = {
     "itransformer":           {"version": "2.4.0", "display_name": "iTransformer",                   "family": "deep_keras",   "algorithm": "iTransformer",               "target": "soh", "r2": 0.595},
     "physics_itransformer":   {"version": "2.4.1", "display_name": "Physics iTransformer",           "family": "deep_keras",   "algorithm": "PhysicsITransformer",        "target": "soh", "r2": 0.600},
     "dynamic_graph_itransformer": {"version": "2.5.0", "display_name": "DG-iTransformer",           "family": "deep_keras",   "algorithm": "DynamicGraphITransformer",   "target": "soh", "r2": 0.595},
-    "best_ensemble":          {"version": "3.0.0", "display_name": "Best Ensemble (RF+XGB+LGB)",     "family": "ensemble",     "algorithm": "WeightedAverage",            "target": "soh", "r2": 0.957},
+    "best_ensemble":          {"version": "3.0.0", "display_name": "Best Ensemble (RF+XGB+LGB)",     "family": "ensemble",     "algorithm": "WeightedAverage",            "target": "soh", "r2": 0.9810},
 }
 
-# R²-proportional weights for BestEnsemble
+# R²-proportional weights for BestEnsemble (v3 values)
 _ENSEMBLE_WEIGHTS: dict[str, float] = {
-    "random_forest": 0.957,
-    "xgboost":       0.928,
-    "lightgbm":      0.928,
-    "extra_trees":   0.967,
-    "gradient_boosting": 0.934,
+    "random_forest":     0.9814,
+    "xgboost":           0.9866,
+    "lightgbm":          0.9826,
+    "extra_trees":       0.9701,
+    "gradient_boosting": 0.9860,
 }
 
 
@@ -372,11 +372,17 @@ class ModelRegistry:
         #   Tree models (RF, ET, GB, XGB, LGB) were fitted on raw numpy X_train
         #                             → NO scaler applied, passed as-is
         #
-        # Both standard_scaler.joblib and linear_scaler.joblib are identical
-        # (same mean_ / scale_). Prefer standard_scaler.joblib (canonical name
-        # from training notebook), fall back to linear_scaler.joblib.
+        # v3 scalers use a version-prefixed naming scheme:
+        #   {version}_features_standard.joblib  — StandardScaler
+        #   {version}_features_minmax.joblib    — MinMaxScaler (fallback)
         scalers_dir = self._scalers_dir
-        for fname in ("standard_scaler.joblib", "linear_scaler.joblib"):
+        version_prefix = self.version  # e.g. "v3"
+        candidate_linear = (
+            f"{version_prefix}_features_standard.joblib",
+            "standard_scaler.joblib",
+            "linear_scaler.joblib",
+        )
+        for fname in candidate_linear:
             sp = scalers_dir / fname
             if sp.exists():
                 try:
@@ -386,7 +392,16 @@ class ModelRegistry:
                 except Exception as exc:
                     log.warning("Could not load %s: %s", fname, exc)
         else:
-            log.warning("No linear scaler found — Ridge/Lasso/SVR/KNN will use raw features")
+            # Try minmax as last resort (v3 fallback)
+            sp_mm = scalers_dir / f"{version_prefix}_features_minmax.joblib"
+            if sp_mm.exists():
+                try:
+                    self.linear_scaler = joblib.load(sp_mm)
+                    log.info("Linear scaler (minmax fallback) loaded from %s", sp_mm)
+                except Exception as exc:
+                    log.warning("Could not load minmax scaler: %s", exc)
+            else:
+                log.warning("No linear scaler found — Ridge/Lasso/SVR/KNN will use raw features")
 
         sp_seq = scalers_dir / "sequence_scaler.joblib"
         if sp_seq.exists():
@@ -789,6 +804,7 @@ class ModelRegistry:
 # ── Singletons ───────────────────────────────────────────────────────────────
 registry_v1 = ModelRegistry(version="v1")
 registry_v2 = ModelRegistry(version="v2")
+registry_v3 = ModelRegistry(version="v3")
 
-# Default registry — v2 (latest models, bug fixes)
-registry = registry_v2
+# Default registry — v3 (best models, highest R²)
+registry = registry_v3

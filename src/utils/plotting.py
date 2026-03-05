@@ -36,8 +36,8 @@ except OSError:
 sns.set_context("paper", font_scale=1.3)
 
 
-def save_fig(fig: plt.Figure, name: str, tight: bool = True) -> Path:
-    """Save figure as PNG to artifacts/figures/.
+def save_fig(fig: plt.Figure, name: str, tight: bool = True, directory: Path | None = None) -> Path:
+    """Save figure as PNG to a figures directory.
 
     Parameters
     ----------
@@ -47,6 +47,8 @@ def save_fig(fig: plt.Figure, name: str, tight: bool = True) -> Path:
         Base filename (without extension).
     tight:
         Whether to call ``tight_layout()`` before saving.
+    directory:
+        Target directory. Defaults to ``FIGURES_DIR`` (artifacts/figures/).
 
     Returns
     -------
@@ -55,7 +57,9 @@ def save_fig(fig: plt.Figure, name: str, tight: bool = True) -> Path:
     """
     if tight:
         fig.tight_layout()
-    path = FIGURES_DIR / f"{name}.png"
+    out_dir = directory if directory is not None else FIGURES_DIR
+    out_dir.mkdir(parents=True, exist_ok=True)
+    path = out_dir / f"{name}.png"
     fig.savefig(path, dpi=FIG_DPI, bbox_inches="tight")
     return path
 

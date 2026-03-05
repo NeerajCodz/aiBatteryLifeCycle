@@ -28,12 +28,12 @@ from fastapi import APIRouter
 from pydantic import BaseModel, Field
 
 from api.model_registry import (
-    FEATURE_COLS_SCALAR, classify_degradation, soh_to_color, registry_v2,
+    FEATURE_COLS_SCALAR, classify_degradation, soh_to_color, registry_v3 as registry_v2,
 )
 
 log = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/api/v2", tags=["simulation"])
+router = APIRouter(prefix="/api/v3", tags=["simulation"])
 
 # -- Physics constants --------------------------------------------------------
 _EA_OVER_R = 6200.0   # Ea/R in Kelvin

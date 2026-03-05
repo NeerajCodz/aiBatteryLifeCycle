@@ -78,18 +78,17 @@ artifacts/
     └── results/         # Validation JSONs
 ```
 
-## Model Performance Summary
+## Model Performance Summary (v3)
 
-| Rank | Model | R² | MAE | RMSE | Family |
-|------|-------|----|-----|------|--------|
-| 1 | Random Forest | 0.957 | 4.78 | 6.46 | Classical |
-| 2 | LightGBM | 0.928 | 5.53 | 8.33 | Classical |
-| 3 | Weighted Avg Ensemble | 0.886 | 3.89 | 6.47 | Ensemble |
-| 4 | TFT | 0.881 | 3.93 | 6.62 | Transformer |
-| 5 | Stacking Ensemble | 0.863 | 4.91 | 7.10 | Ensemble |
-| 6 | XGBoost | 0.847 | 8.06 | 12.14 | Classical |
-| 7 | SVR | 0.805 | 7.56 | 13.71 | Classical |
-| 8 | VAE-LSTM | 0.730 | 7.82 | 9.98 | Generative |
+| Rank | Model | R² | MAE | Family |
+|------|-------|----|-----|--------|
+| 1 | XGBoost | 0.9866 | 1.58 | Classical |
+| 2 | GradientBoosting | 0.9860 | 1.38 | Classical |
+| 3 | LightGBM | 0.9826 | 1.98 | Classical |
+| 4 | RandomForest | 0.9814 | 1.83 | Classical |
+| 5 | ExtraTrees | 0.9701 | 3.20 | Classical |
+| 6 | TFT | 0.8751 | 3.88 | Transformer |
+| 7 | Weighted Avg Ensemble | 0.8991 | 3.51 | Ensemble |
 
 ## Usage
 
@@ -154,7 +153,7 @@ def main():
     # 3. Upload each version directly at repo root: v1/ and v2/ (NOT under artifacts/)
     #    Split into one commit per subdirectory so no single commit is too large
     #    (the 100 MB random_forest.joblib would time out a combined commit).
-    for version in ["v1", "v2"]:
+    for version in ["v1", "v2", "v3"]:
         version_path = ARTIFACTS / version
         if not version_path.exists():
             print(f"  [skip] {version_path} does not exist")

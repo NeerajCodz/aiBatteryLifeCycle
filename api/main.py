@@ -51,13 +51,13 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 
-from api.model_registry import registry, registry_v1, registry_v2
+from api.model_registry import registry, registry_v1, registry_v2, registry_v3
 from api.schemas import HealthResponse
 from src.utils.logger import get_logger
 
 log = get_logger(__name__)
 
-__version__ = "2.0.0"
+__version__ = "3.0.0"
 
 # ── Static frontend path ────────────────────────────────────────────────────
 _HERE = Path(__file__).resolve().parent
@@ -73,6 +73,8 @@ async def lifespan(app: FastAPI):
     log.info("v1 registry ready — %d models loaded", registry_v1.model_count)
     registry_v2.load_all()
     log.info("v2 registry ready — %d models loaded", registry_v2.model_count)
+    registry_v3.load_all()
+    log.info("v3 registry ready — %d models loaded", registry_v3.model_count)
     yield
     log.info("Shutting down battery-lifecycle API")
 
@@ -106,13 +108,13 @@ async def health():
     return HealthResponse(
         status="ok",
         version=__version__,
-        models_loaded=registry_v1.model_count + registry_v2.model_count,
+        models_loaded=registry_v1.model_count + registry_v2.model_count + registry_v3.model_count,
         device=registry.device,
     )
 
 
 # ── Version management ───────────────────────────────────────────────────────
-_REGISTRIES = {"v1": registry_v1, "v2": registry_v2}
+_REGISTRIES = {"v1": registry_v1, "v2": registry_v2, "v3": registry_v3}
 _version_status: dict[str, str] = {}   # "downloading" | "ready" | "error"
 
 
@@ -136,7 +138,7 @@ async def list_versions():
             "model_count": _REGISTRIES[v].model_count,
             "status": _version_status.get(v, "ready" if _version_loaded(v) else "not_downloaded"),
         }
-        for v in ["v2", "v1"]
+        for v in ["v3", "v2", "v1"]
     ]
 
 
@@ -176,13 +178,15 @@ async def load_version(version: str, background_tasks: BackgroundTasks):
 # ── Include routers ──────────────────────────────────────────────────────────
 from api.routers.predict import router as predict_router, v1_router
 from api.routers.predict_v2 import router as predict_v2_router
+from api.routers.predict_v3 import router as predict_v3_router
 from api.routers.visualize import router as viz_router
 from api.routers.simulate import router as simulate_router
 
 app.include_router(predict_router)    # /api/* (default, uses v2 registry)
 app.include_router(v1_router)         # /api/v1/* (legacy v1 models)
-app.include_router(predict_v2_router) # /api/v2/* (v2 models, bug-fixed)
-app.include_router(simulate_router)   # /api/v2/simulate (ML-driven simulation)
+app.include_router(predict_v2_router) # /api/v2/* (v2 models)
+app.include_router(predict_v3_router) # /api/v3/* (v3 models, best accuracy)
+app.include_router(simulate_router)   # /api/v3/simulate (ML-driven simulation)
 app.include_router(viz_router)
 
 

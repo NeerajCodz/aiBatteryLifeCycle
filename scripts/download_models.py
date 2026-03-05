@@ -58,7 +58,7 @@ def _hf_kwargs(allow_patterns: list | None = None,
     return kwargs
 
 
-def _key_models(version: str = "v2") -> list:
+def _key_models(version: str = "v3") -> list:
     base = ARTIFACTS_DIR / version / "models" / "classical"
     return [base / f"{m}.joblib" for m in ("random_forest", "xgboost", "lightgbm")]
 
@@ -68,7 +68,7 @@ def version_loaded(version: str) -> bool:
     return all(p.exists() for p in _key_models(version))
 
 
-def already_downloaded(version: str = "v2") -> bool:
+def already_downloaded(version: str = "v3") -> bool:
     """Return True only when all three BestEnsemble component models are present."""
     missing = [p for p in _key_models(version) if not p.exists()]
     if missing:
@@ -102,7 +102,7 @@ def download_version(version: str) -> None:
 
 
 def download_all() -> None:
-    """Download all versions (v1 + v2) from HF Hub."""
+    """Download all versions (v1 + v2 + v3) from HF Hub."""
     _ensure_hub()
     from huggingface_hub import snapshot_download
     ARTIFACTS_DIR.mkdir(parents=True, exist_ok=True)
@@ -126,8 +126,8 @@ def main() -> None:
             download_version(args.version)
         return
 
-    # Default: ensure v2 (latest) is present
-    if already_downloaded("v2"):
+    # Default: ensure v3 (latest) is present
+    if already_downloaded("v3"):
         print("[download_models] Artifacts already present — skipping download")
         return
 

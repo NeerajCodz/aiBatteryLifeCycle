@@ -16,8 +16,8 @@ import {
 import { fetchVersions, loadVersion, VersionInfo } from "../api";
 
 interface Props {
-  activeVersion: "v1" | "v2";
-  onSwitch: (v: "v1" | "v2") => void;
+  activeVersion: "v1" | "v2" | "v3";
+  onSwitch: (v: "v1" | "v2" | "v3") => void;
 }
 
 export default function VersionSelector({ activeVersion, onSwitch }: Props) {
@@ -78,7 +78,7 @@ export default function VersionSelector({ activeVersion, onSwitch }: Props) {
   };
 
   const handleSwitch = (version: string) => {
-    onSwitch(version as "v1" | "v2");
+    onSwitch(version as "v1" | "v2" | "v3");
     setOpen(false);
   };
 

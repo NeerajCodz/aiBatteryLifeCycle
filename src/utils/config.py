@@ -30,8 +30,8 @@ SCALERS_DIR = ARTIFACTS_DIR / "scalers"
 FIGURES_DIR = ARTIFACTS_DIR / "figures"
 LOGS_DIR = ARTIFACTS_DIR / "logs"
 
-# Currently active artifact version  (changed when v2 is validated)
-ACTIVE_VERSION: str = "v2"
+# Currently active artifact version  (changed when v3 is validated)
+ACTIVE_VERSION: str = "v3"
 
 # Ensure all legacy artifact directories exist (backward compat)
 for _d in (MODELS_DIR, SCALERS_DIR, FIGURES_DIR, LOGS_DIR,
@@ -105,6 +105,23 @@ DROPOUT = 0.2
 LATENT_DIM = 16            # For VAE
 
 # ── Feature col lists (duplicated from preprocessing for easy import) ────────
+FEATURE_COLS_V2 = [
+    "cycle_number", "ambient_temperature",
+    "peak_voltage", "min_voltage", "voltage_range",
+    "avg_current", "avg_temp", "temp_rise",
+    "cycle_duration", "Re", "Rct", "delta_capacity",
+]
+
+# v3 adds 6 physics-informed features on top of v2's 12
+FEATURE_COLS_V3 = FEATURE_COLS_V2 + [
+    "capacity_retention",   # Q_n / Q_1 per battery (0-1 ratio)
+    "cumulative_energy",    # cumulative Ah throughput
+    "dRe_dn",               # impedance growth rate (ΔRe per cycle)
+    "dRct_dn",              # impedance growth rate (ΔRct per cycle)
+    "soh_rolling_mean",     # 5-cycle rolling mean SOH (smoothed)
+    "voltage_slope",        # cycle-over-cycle voltage midpoint slope
+]
+
 FEATURE_COLS_SCALAR = [
     "cycle_number", "ambient_temperature",
     "peak_voltage", "min_voltage", "voltage_range",

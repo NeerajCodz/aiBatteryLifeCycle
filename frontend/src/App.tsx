@@ -14,9 +14,9 @@ type Tab = "simulation" | "predict" | "graphs" | "recommend" | "metrics" | "pape
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<Tab>("simulation");
-  const [apiVersion, setVersion] = useState<"v1" | "v2">(getApiVersion());
+  const [apiVersion, setVersion] = useState<"v1" | "v2" | "v3">(getApiVersion());
 
-  const handleVersionChange = (v: "v1" | "v2") => {
+  const handleVersionChange = (v: "v1" | "v2" | "v3") => {
     setApiVersion(v);
     setVersion(v);
   };

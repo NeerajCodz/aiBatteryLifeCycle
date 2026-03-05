@@ -1,10 +1,10 @@
 import axios from "axios";
 
-/** Active API version — toggle between v1 (legacy) and v2 (latest). */
-let _apiVersion: "v1" | "v2" = "v2";
+/** Active API version — toggle between v1 (legacy), v2, and v3 (latest). */
+let _apiVersion: "v1" | "v2" | "v3" = "v3";
 
 export const getApiVersion = () => _apiVersion;
-export const setApiVersion = (v: "v1" | "v2") => {
+export const setApiVersion = (v: "v1" | "v2" | "v3") => {
   _apiVersion = v;
 };
 
@@ -68,7 +68,7 @@ export interface ModelVersionGroups {
 
 // ── Version management ───────────────────────────────────────────────────────
 export interface VersionInfo {
-  id: string;            // "v1" | "v2"
+  id: string;            // "v1" | "v2" | "v3"
   display: string;       // "Version 1" | "Version 2"
   loaded: boolean;
   model_count: number;

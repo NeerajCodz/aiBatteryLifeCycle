@@ -259,3 +259,76 @@ def build_battery_feature_dataset(
         result["coulombic_efficiency"] = np.nan
 
     return result.reset_index(drop=True)
+
+
+# ── v3 enhanced features ────────────────────────────────────────────────────
+def add_v3_features(df: pd.DataFrame) -> pd.DataFrame:
+    """Add v3 physics-informed features on top of the base feature dataset.
+
+    New features (6 total):
+    - capacity_retention: Q_n / Q_1 per battery (0-1, monotonically decreasing)
+    - cumulative_energy:  cumulative Ah throughput (proxy for total energy cycled)
+    - dRe_dn:            impedance growth rate (ΔRe per cycle, forward diff)
+    - dRct_dn:           impedance growth rate (ΔRct per cycle)
+    - soh_rolling_mean:  5-cycle rolling mean SOH (noise-smoothed degradation)
+    - voltage_slope:     cycle-over-cycle voltage midpoint slope (dV_mid/dn)
+
+    Parameters
+    ----------
+    df : pd.DataFrame
+        Output from ``build_battery_feature_dataset()``.
+
+    Returns
+    -------
+    pd.DataFrame
+        Same dataframe with 6 new columns appended.
+    """
+    out = df.copy()
+
+    # ── capacity_retention: Q_n / Q_1 per battery ───────────────────────────
+    first_cap = out.groupby("battery_id")["Capacity"].transform("first")
+    out["capacity_retention"] = out["Capacity"] / first_cap.replace(0, np.nan)
+
+    # ── cumulative_energy: cumulative Ah throughput ─────────────────────────
+    out["cumulative_energy"] = out.groupby("battery_id")["Capacity"].cumsum()
+
+    # ── impedance growth rates (dRe/dn, dRct/dn) ───────────────────────────
+    out["dRe_dn"] = out.groupby("battery_id")["Re"].diff().fillna(0)
+    out["dRct_dn"] = out.groupby("battery_id")["Rct"].diff().fillna(0)
+
+    # ── SOH rolling mean (5-cycle window) ───────────────────────────────────
+    out["soh_rolling_mean"] = out.groupby("battery_id")["SoH"].transform(
+        lambda s: s.rolling(window=5, min_periods=1, center=False).mean()
+    )
+
+    # ── voltage_slope: cycle-over-cycle mid-voltage change ──────────────────
+    if "peak_voltage" in out.columns and "min_voltage" in out.columns:
+        v_mid = (out["peak_voltage"] + out["min_voltage"]) / 2.0
+        out["voltage_slope"] = v_mid.groupby(out["battery_id"]).diff().fillna(0)
+    else:
+        out["voltage_slope"] = 0.0
+
+    return out
+
+
+def impute_features(df: pd.DataFrame) -> pd.DataFrame:
+    """Fix NaN handling: forward-fill within battery, then group median.
+
+    Bug fix for v2 which used ``fillna(0)`` — physically impossible for Re/Rct.
+    """
+    out = df.copy()
+    numeric_cols = out.select_dtypes(include=[np.number]).columns
+
+    # Step 1: forward fill within each battery (temporal continuity)
+    for col in numeric_cols:
+        out[col] = out.groupby("battery_id")[col].transform(
+            lambda s: s.ffill().bfill()
+        )
+
+    # Step 2: remaining NaN → global median (cross-battery)
+    for col in numeric_cols:
+        if out[col].isna().any():
+            median_val = out[col].median()
+            out[col] = out[col].fillna(median_val if pd.notna(median_val) else 0)
+
+    return out
