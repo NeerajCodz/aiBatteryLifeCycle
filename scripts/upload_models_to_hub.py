@@ -183,7 +183,7 @@ def main():
             if not files_in_sub:
                 continue
 
-            print(f"  Uploading {len(files_in_sub)} file(s) → {repo_path}/")
+            print(f"  Uploading {len(files_in_sub)} file(s) -> {repo_path}/")
             upload_folder(
                 folder_path=str(subdir),
                 path_in_repo=repo_path,
