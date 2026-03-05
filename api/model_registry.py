@@ -223,37 +223,60 @@ class ModelRegistry:
             except Exception as exc:
                 log.warning("Failed to load %s: %s", p.name, exc)
 
-    def _build_pytorch_model(self, name: str) -> Any | None:
+    def _detect_n_feat(self, p: Path) -> int:
+        """Infer input feature dimension from a PyTorch checkpoint.
+
+        Checks common first-layer weight keys to determine n_features,
+        handling models trained with a different feature count (e.g. v3=18).
+        """
+        try:
+            import torch
+            state = torch.load(p, map_location="cpu", weights_only=True)
+            # LSTM / BiLSTM / GRU: weight_ih_l0 shape is (gates*hidden, n_feat)
+            for key in ("lstm.weight_ih_l0", "encoder_lstm.weight_ih_l0", "gru.weight_ih_l0"):
+                if key in state:
+                    return int(state[key].shape[-1])
+            # BatteryGPT: input_proj.weight shape is (d_model, n_feat)
+            if "input_proj.weight" in state:
+                return int(state["input_proj.weight"].shape[-1])
+            # TFT: softmax_proj.bias shape is (n_features,)
+            if "var_selection.softmax_proj.bias" in state:
+                return int(state["var_selection.softmax_proj.bias"].shape[0])
+        except Exception:
+            pass
+        return _N_FEAT
+
+    def _build_pytorch_model(self, name: str, n_feat: int = _N_FEAT) -> Any | None:
         """Instantiate a PyTorch module with the architecture used during training."""
         try:
             if name == "vanilla_lstm":
                 from src.models.deep.lstm import VanillaLSTM
-                return VanillaLSTM(_N_FEAT, _HIDDEN, _LSTM_LAYERS, _DROPOUT)
+                return VanillaLSTM(n_feat, _HIDDEN, _LSTM_LAYERS, _DROPOUT)
             if name == "bidirectional_lstm":
                 from src.models.deep.lstm import BidirectionalLSTM
-                return BidirectionalLSTM(_N_FEAT, _HIDDEN, _LSTM_LAYERS, _DROPOUT)
+                return BidirectionalLSTM(n_feat, _HIDDEN, _LSTM_LAYERS, _DROPOUT)
             if name == "gru":
                 from src.models.deep.lstm import GRUModel
-                return GRUModel(_N_FEAT, _HIDDEN, _LSTM_LAYERS, _DROPOUT)
+                return GRUModel(n_feat, _HIDDEN, _LSTM_LAYERS, _DROPOUT)
             if name == "attention_lstm":
                 from src.models.deep.lstm import AttentionLSTM
-                return AttentionLSTM(_N_FEAT, _HIDDEN, _ATTN_LAYERS, _DROPOUT)
+                return AttentionLSTM(n_feat, _HIDDEN, _ATTN_LAYERS, _DROPOUT)
             if name == "batterygpt":
                 from src.models.deep.transformer import BatteryGPT
                 return BatteryGPT(
-                    input_dim=_N_FEAT, d_model=_D_MODEL, n_heads=_N_HEADS,
+                    input_dim=n_feat, d_model=_D_MODEL, n_heads=_N_HEADS,
                     n_layers=_TF_LAYERS, dropout=_DROPOUT, max_len=64,
                 )
             if name == "tft":
                 from src.models.deep.transformer import TemporalFusionTransformer
                 return TemporalFusionTransformer(
-                    n_features=_N_FEAT, d_model=_D_MODEL, n_heads=_N_HEADS,
+                    n_features=n_feat, d_model=_D_MODEL, n_heads=_N_HEADS,
                     n_layers=_TF_LAYERS, dropout=_DROPOUT,
                 )
             if name == "vae_lstm":
                 from src.models.deep.vae_lstm import VAE_LSTM
                 return VAE_LSTM(
-                    input_dim=_N_FEAT, seq_len=_SEQ_LEN,
+                    input_dim=n_feat, seq_len=_SEQ_LEN,
                     hidden_dim=_HIDDEN, latent_dim=16,
                     n_layers=_LSTM_LAYERS, dropout=_DROPOUT,
                 )
@@ -273,7 +296,8 @@ class ModelRegistry:
             return
         for p in sorted(ddir.glob("*.pt")):
             name = p.stem
-            model = self._build_pytorch_model(name)
+            n_feat = self._detect_n_feat(p)
+            model = self._build_pytorch_model(name, n_feat=n_feat)
             if model is None:
                 self.model_meta[name] = {
                     **MODEL_CATALOG.get(name, {}),
@@ -290,7 +314,7 @@ class ModelRegistry:
                 catalog = MODEL_CATALOG.get(name, {})
                 self.model_meta[name] = {
                     **catalog, "family": "deep_pytorch",
-                    "loaded": True, "path": str(p),
+                    "loaded": True, "path": str(p), "n_feat": n_feat,
                 }
                 log.info("Loaded PyTorch:   %-22s  v%s", name, catalog.get("version", "?"))
             except Exception as exc:
@@ -523,12 +547,13 @@ class ModelRegistry:
         return x
 
     def _build_sequence_array(
-        self, x: np.ndarray, seq_len: int = _SEQ_LEN
+        self, x: np.ndarray, seq_len: int = _SEQ_LEN, n_feat: int | None = None
     ) -> np.ndarray:
-        """Convert single-cycle feature row → scaled (1, seq_len, F) numpy array.
+        """Convert single-cycle feature row → scaled (1, seq_len, n_feat) numpy array.
 
         Tile the current feature vector across *seq_len* timesteps and apply
         the sequence scaler so values match the training distribution.
+        If *n_feat* > x.shape[-1] the input is zero-padded to match the model.
         """
         if self.sequence_scaler is not None:
             try:
@@ -537,15 +562,19 @@ class ModelRegistry:
                 x_sc = x
         else:
             x_sc = x
+        # Pad to model's expected feature count if necessary (e.g. v3 deep = 18)
+        if n_feat and n_feat > x_sc.shape[-1]:
+            pad_width = n_feat - x_sc.shape[-1]
+            x_sc = np.pad(x_sc, ((0, 0), (0, pad_width)))
         # Tile to (1, seq_len, F)
         return np.tile(x_sc[:, np.newaxis, :], (1, seq_len, 1)).astype(np.float32)
 
     def _build_sequence_tensor(
-        self, x: np.ndarray, seq_len: int = _SEQ_LEN
+        self, x: np.ndarray, seq_len: int = _SEQ_LEN, n_feat: int | None = None
     ) -> Any:
         """Same as :meth:`_build_sequence_array` but returns a PyTorch tensor."""
         import torch
-        return torch.tensor(self._build_sequence_array(x, seq_len), dtype=torch.float32)
+        return torch.tensor(self._build_sequence_array(x, seq_len, n_feat), dtype=torch.float32)
 
     def _predict_ensemble(self, x: np.ndarray) -> tuple[float, str]:
         """Weighted-average SOH prediction from BestEnsemble component models.
@@ -613,8 +642,10 @@ class ModelRegistry:
                 try:
                     import torch
                     with torch.no_grad():
-                        # Build scaled (1, seq_len, F) sequence tensor
-                        t = self._build_sequence_tensor(x).to(self.device)
+                        # Build scaled (1, seq_len, n_feat) sequence tensor
+                        # n_feat may be > 12 for models trained with extra features (e.g. v3)
+                        model_n_feat = self.model_meta.get(name, {}).get("n_feat", _N_FEAT)
+                        t = self._build_sequence_tensor(x, n_feat=model_n_feat).to(self.device)
                         out = model(t)
                         # VAE-LSTM returns a dict; all others return a tensor
                         if isinstance(out, dict):
@@ -625,8 +656,13 @@ class ModelRegistry:
                     raise
             elif family == "deep_keras":
                 try:
-                    # Build scaled (1, seq_len, F) numpy array for Keras
-                    seq_np = self._build_sequence_array(x)   # (1, 32, F)
+                    # Build scaled (1, seq_len, n_feat) numpy array for Keras
+                    # Derive n_feat from model input shape: (None, seq_len, n_feat)
+                    try:
+                        keras_n_feat = int(model.input_shape[-1])
+                    except Exception:
+                        keras_n_feat = None
+                    seq_np = self._build_sequence_array(x, n_feat=keras_n_feat)
                     out = model.predict(seq_np, verbose=0)
                     # Physics-Informed model returns a dict with multiple heads
                     if isinstance(out, dict):
@@ -775,8 +811,8 @@ class ModelRegistry:
     # ── Info helpers ──────────────────────────────────────────────────────
     @property
     def model_count(self) -> int:
-        """Total number of registered model entries."""
-        return len(set(list(self.models.keys()) + list(self.model_meta.keys())))
+        """Number of successfully loaded models."""
+        return len(self.models)
 
     def list_models(self) -> list[dict[str, Any]]:
         """Return full model listing with versioning, metrics, and load status."""

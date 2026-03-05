@@ -210,4 +210,4 @@ export interface SimulateResponse {
 }
 
 export const simulateBatteries = (req: SimulateRequest) =>
-  axios.post<SimulateResponse>("/api/v2/simulate", req).then((r) => r.data);
+  baseApi.post<SimulateResponse>("/api/v3/simulate", req).then((r) => r.data);
