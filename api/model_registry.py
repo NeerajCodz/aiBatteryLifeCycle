@@ -70,11 +70,24 @@ FEATURE_COLS_SCALAR: list[str] = [
     "cycle_duration", "Re", "Rct", "delta_capacity",
 ]
 
+# v3 extended feature set: FEATURE_COLS_SCALAR + 6 engineered columns.
+# Order MUST match the training notebook (NB08 / v3 train_split.csv).
+# NOTE: coulombic_efficiency is always 0 in the training data and was dropped;
+#       soh_rolling_mean WAS retained as a feature (data-leakage intentional).
+V3_FEATURE_COLS: list[str] = [
+    "cycle_number", "ambient_temperature",
+    "peak_voltage", "min_voltage", "voltage_range",
+    "avg_current", "avg_temp", "temp_rise",
+    "cycle_duration", "Re", "Rct", "delta_capacity",
+    "capacity_retention", "cumulative_energy",
+    "dRe_dn", "dRct_dn", "soh_rolling_mean", "voltage_slope",
+]
+
 # Columns present in the features CSV that are NOT model inputs
-# (targets, identifiers, or derived columns excluded from training)
+# (targets, identifiers, or derived labels).
 _NON_FEATURE_COLS: frozenset[str] = frozenset({
     "battery_id", "Capacity", "datetime", "SoH", "RUL",
-    "degradation_state", "soh_rolling_mean",
+    "degradation_state", "coulombic_efficiency",
 })
 
 # ── Model catalog (single source of truth for versions & metadata) ────────────
@@ -449,36 +462,26 @@ class ModelRegistry:
             log.warning("sequence_scaler.joblib not found — deep models will use raw features")
 
     def _load_feature_cols(self) -> list[str]:
-        """Discover feature column names from artifacts features CSV.
+        """Return the feature column names for this registry version.
 
-        Reads the features CSV for this version (if present), drops known
-        non-feature columns (targets, identifiers, derived labels), and
-        validates the count against the loaded scaler's ``n_features_in_``.
-        Falls back to the module-level ``FEATURE_COLS_SCALAR`` list.
+        v3 uses the hardcoded V3_FEATURE_COLS list (18 features in the exact
+        order used during NB08 training, verified against the v3 scaler means).
+        v1 / v2 use the 12-feature FEATURE_COLS_SCALAR baseline.
         """
-        features_dir = self._artifacts / "features"
-        for fname in ("battery_features.csv", "train_split.csv"):
-            fpath = features_dir / fname
-            if not fpath.exists():
-                continue
-            try:
-                all_cols = pd.read_csv(fpath, nrows=0).columns.tolist()
-                feat_cols = [c for c in all_cols if c not in _NON_FEATURE_COLS]
-                n_expected = getattr(self.linear_scaler, "n_features_in_", None)
-                if n_expected and len(feat_cols) != n_expected:
-                    log.warning(
-                        "Feature col count mismatch: CSV=%d, scaler=%d — using scaler count",
-                        len(feat_cols), n_expected,
-                    )
-                    feat_cols = feat_cols[:n_expected]
-                if feat_cols:
-                    log.info(
-                        "Feature columns loaded from artifacts (%d cols, source: %s)",
-                        len(feat_cols), fname,
-                    )
-                    return feat_cols
-            except Exception as exc:
-                log.warning("Could not load feature cols from %s: %s", fname, exc)
+        if self.version == "v3":
+            # Verify against scaler (sanity check, warns if mismatch).
+            n_expected = getattr(self.linear_scaler, "n_features_in_", None)
+            if n_expected and n_expected != len(V3_FEATURE_COLS):
+                log.warning(
+                    "v3 scaler expects %d features but V3_FEATURE_COLS has %d — "
+                    "using V3_FEATURE_COLS",
+                    n_expected, len(V3_FEATURE_COLS),
+                )
+            log.info(
+                "Feature columns: V3_FEATURE_COLS (%d features, FEAT_SCALAR + 6 engineered)",
+                len(V3_FEATURE_COLS),
+            )
+            return list(V3_FEATURE_COLS)
         log.info("Using default FEATURE_COLS_SCALAR (%d features)", len(FEATURE_COLS_SCALAR))
         return list(FEATURE_COLS_SCALAR)
 
@@ -600,6 +603,9 @@ class ModelRegistry:
         Tile the current feature vector across *seq_len* timesteps and apply
         the sequence scaler so values match the training distribution.
         If *n_feat* > x.shape[-1] the input is zero-padded to match the model.
+        If *n_feat* < x.shape[-1] the input is truncated to the first n_feat
+        columns (valid for v3 registry where self.feature_cols has 18 features
+        but deep models were trained on the first 12 = FEATURE_COLS_SCALAR).
         """
         if self.sequence_scaler is not None:
             try:
@@ -608,10 +614,13 @@ class ModelRegistry:
                 x_sc = x
         else:
             x_sc = x
-        # Pad to model's expected feature count if necessary (e.g. v3 deep = 18)
+        # Resize to model's expected feature count
         if n_feat and n_feat > x_sc.shape[-1]:
-            pad_width = n_feat - x_sc.shape[-1]
-            x_sc = np.pad(x_sc, ((0, 0), (0, pad_width)))
+            # zero-pad extra features
+            x_sc = np.pad(x_sc, ((0, 0), (0, n_feat - x_sc.shape[-1])))
+        elif n_feat and n_feat < x_sc.shape[-1]:
+            # truncate to first n_feat (deep models trained on FEATURE_COLS_SCALAR subset)
+            x_sc = x_sc[:, :n_feat]
         # Tile to (1, seq_len, F)
         return np.tile(x_sc[:, np.newaxis, :], (1, seq_len, 1)).astype(np.float32)
 
@@ -752,7 +761,14 @@ class ModelRegistry:
         else:
             rul = 0.0
 
-        version = self.model_meta.get(name, MODEL_CATALOG.get(name, {})).get("version", "?")
+        # Normalize version to registry major (e.g. v3 registry → 3.0.0)
+        raw_ver = self.model_meta.get(name, MODEL_CATALOG.get(name, {})).get("version", "?")
+        if raw_ver and raw_ver != "?":
+            ver_major = raw_ver.split(".")[0]
+            reg_major = self.version.lstrip("v")
+            if ver_major != reg_major:
+                raw_ver = f"{reg_major}.0.0"
+        version = raw_ver
 
         return {
             "soh_pct": round(soh, 2),

@@ -5,12 +5,12 @@ Bulk battery lifecycle simulation endpoint - vectorized ML-driven.
 
 Performance design (O(1) Python overhead per battery regardless of step count):
     1. SEI impedance growth  - numpy cumsum (no Python loop)
-    2. Feature matrix build  - numpy column_stack ->  (N_steps, 12)
+    2. Feature matrix build  - numpy column_stack -> (N_steps, n_features)
     3. ML prediction         - single model.predict() call via predict_array()
     4. RUL / EOL             - numpy diff / cumsum / searchsorted
     5. Classify / colorize   - numpy searchsorted on pre-built label arrays
 
-Scaler dispatch mirrors NB03 training EXACTLY:
+Scaler dispatch mirrors training exactly:
     Tree models (RF / ET / XGB / LGB / GB)  -> raw numpy   (no scaler)
     Linear / SVR / KNN                       -> standard_scaler.joblib.transform(X)
     best_ensemble                            -> per-component dispatch (same rules)
@@ -28,7 +28,8 @@ from fastapi import APIRouter
 from pydantic import BaseModel, Field
 
 from api.model_registry import (
-    FEATURE_COLS_SCALAR, classify_degradation, soh_to_color, registry_v3 as registry_v2,
+    FEATURE_COLS_SCALAR, V3_FEATURE_COLS, classify_degradation, soh_to_color,
+    registry_v3 as registry_v2,
 )
 
 log = logging.getLogger(__name__)
@@ -53,8 +54,10 @@ _TIME_UNIT_LABELS: dict[str, str] = {
     "month":  "Months",  "year":   "Years",
 }
 
-# Column index map - must stay in sync with FEATURE_COLS_SCALAR
+# Column index map - must stay in sync with FEATURE_COLS_SCALAR (12 features)
 _F = {col: idx for idx, col in enumerate(FEATURE_COLS_SCALAR)}
+# Column index map for V3_FEATURE_COLS (18 features)
+_F3 = {col: idx for idx, col in enumerate(V3_FEATURE_COLS)}
 
 # Pre-built label/color arrays for O(1) numpy-vectorized classification
 _SOH_BINS   = np.array([70.0, 80.0, 90.0])                       # searchsorted thresholds
@@ -148,28 +151,76 @@ def _build_feature_matrix(
     b: BatterySimConfig, steps: int,
     re_arr: np.ndarray, rct_arr: np.ndarray,
 ) -> np.ndarray:
-    """Build (steps, 12) feature matrix in FEATURE_COLS_SCALAR order.
+    """Build (steps, n_features) feature matrix in registry.feature_cols order.
 
-    Column ordering is guaranteed by the _F index map so the resulting matrix
-    is byte-identical to what the NB03 models were trained on, before any
-    scaling step.  Scaling is applied inside predict_array() per model family.
+    For v3 (18 features) the extra 6 engineered columns are estimated from physics:
+      - capacity_retention: current capacity / initial capacity
+      - cumulative_energy:  cumsumed capacity per cycle (Ah)
+      - dRe_dn / dRct_dn:  per-cycle derivative of SEI impedances
+      - soh_rolling_mean:   rolling mean of physics-estimated SOH trajectory
+      - voltage_slope:      assumed constant (0) in simulation
+
+    Column ordering uses registry_v2.feature_cols so predictions are correct
+    regardless of whether the registry is v1/v2 (12 cols) or v3 (18 cols).
     """
     N      = steps
-    cycles = np.arange(b.start_cycle, b.start_cycle + N, dtype=np.float64)
-    X      = np.empty((N, len(FEATURE_COLS_SCALAR)), dtype=np.float64)
-    X[:, _F["cycle_number"]]        = cycles
-    X[:, _F["ambient_temperature"]] = b.ambient_temperature
-    X[:, _F["peak_voltage"]]        = b.peak_voltage
-    X[:, _F["min_voltage"]]         = b.min_voltage
-    X[:, _F["voltage_range"]]       = b.peak_voltage - b.min_voltage
-    X[:, _F["avg_current"]]         = b.avg_current
-    X[:, _F["avg_temp"]]            = b.avg_temp
-    X[:, _F["temp_rise"]]           = b.temp_rise
-    X[:, _F["cycle_duration"]]      = b.cycle_duration
-    X[:, _F["Re"]]                  = re_arr
-    X[:, _F["Rct"]]                 = rct_arr
-    X[:, _F["delta_capacity"]]      = b.delta_capacity
-    return X
+    step_a = np.arange(N, dtype=np.float64)
+    cycles = step_a + b.start_cycle
+
+    # ---- 12 base features (always present) ---------------------------------
+    feat_dict: dict[str, np.ndarray] = {
+        "cycle_number":        cycles,
+        "ambient_temperature": np.full(N, b.ambient_temperature),
+        "peak_voltage":        np.full(N, b.peak_voltage),
+        "min_voltage":         np.full(N, b.min_voltage),
+        "voltage_range":       np.full(N, b.peak_voltage - b.min_voltage),
+        "avg_current":         np.full(N, b.avg_current),
+        "avg_temp":            np.full(N, b.avg_temp),
+        "temp_rise":           np.full(N, b.temp_rise),
+        "cycle_duration":      np.full(N, b.cycle_duration),
+        "Re":                  re_arr,
+        "Rct":                 rct_arr,
+        "delta_capacity":      np.full(N, b.delta_capacity),
+    }
+
+    # ---- 6 extra v3 features (estimated from physics) ----------------------
+    initial_cap = max(b.initial_soh / 100.0 * _Q_NOM, 1e-6)  # Ah
+    cap_per_step = np.maximum(initial_cap + b.delta_capacity * step_a, 0.0)
+
+    # capacity_retention = current_capacity / initial_capacity (ratio ~0-1)
+    cap_retention = np.clip(cap_per_step / initial_cap, 0.0, None)
+
+    # cumulative energy delivered (Ah)
+    cum_energy = np.cumsum(cap_per_step)
+
+    # per-cycle SEI impedance derivatives
+    dRe_dn  = np.diff(re_arr,  prepend=b.Re)
+    dRct_dn = np.diff(rct_arr, prepend=b.Rct)
+
+    # physics-estimated SOH rolling mean (window=10, min_periods=1) ---
+    # used as a proxy since soh_rolling_mean is a v3 training feature
+    deg_pct_per_cycle = abs(b.delta_capacity) / _Q_NOM * 100.0
+    soh_est = np.maximum(b.initial_soh - deg_pct_per_cycle * step_a, 0.0)
+    # rolling mean via cumsum (O(N), no Python loop)
+    window = 10
+    csoh  = np.cumsum(np.concatenate([[0.0], soh_est]))
+    cnt   = np.minimum(np.arange(1, N + 1), window)
+    start = np.maximum(np.arange(N + 1)[1:] - window, 0)
+    soh_rolling = (csoh[np.arange(1, N + 1)] - csoh[start]) / cnt
+
+    feat_dict.update({
+        "capacity_retention": cap_retention,
+        "cumulative_energy":  cum_energy,
+        "dRe_dn":             dRe_dn,
+        "dRct_dn":            dRct_dn,
+        "soh_rolling_mean":   soh_rolling,
+        "voltage_slope":      np.zeros(N),
+        "coulombic_efficiency": np.zeros(N),  # always 0 in training data
+    })
+
+    # Build matrix in registry's feature_cols order; unknown cols default to 0
+    feat_cols = registry_v2.feature_cols  # 12 for v1/v2, 18 for v3
+    return np.column_stack([feat_dict.get(col, np.zeros(N)) for col in feat_cols])
 
 
 def _physics_soh(b: BatterySimConfig, steps: int, temp_f: float) -> np.ndarray:
