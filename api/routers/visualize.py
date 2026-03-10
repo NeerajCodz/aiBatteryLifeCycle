@@ -158,6 +158,11 @@ def _safe_read_json(path: Path) -> dict:
         return json.load(f)
 
 
+def _load_dataset_info() -> dict:
+    """Load global dataset metadata used by Dataset/Validation tabs."""
+    return _safe_read_json(_ARTIFACTS / "dataset.json")
+
+
 def _safe_read_csv_first(paths: list[Path]) -> list[dict]:
     for path in paths:
         if path.exists():
@@ -242,6 +247,7 @@ def _build_metrics_payload(version: str) -> dict:
     reports = root / "reports"
     models_meta = _safe_read_json(root / "models.json")
     datamap = _safe_read_json(root / "datamap.json")
+    dataset_info = _load_dataset_info()
 
     unified = _safe_read_csv_first([results / "unified_results.csv"])
     classical_results = _safe_read_csv_first([
@@ -332,6 +338,7 @@ def _build_metrics_payload(version: str) -> dict:
         "dg_itransformer": dg_itransformer,
         "figures": _version_figures(version),
         "battery_stats": _battery_stats_for_version(version),
+        "dataset_info": dataset_info,
     }
 
 

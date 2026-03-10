@@ -16,6 +16,7 @@ import { fetchMetrics } from "../api";
 interface MetricsData {
   version?: string;
   models_meta?: any;
+  dataset_info?: any;
   unified_results: any[];
   classical_results: any[];
   classical_soh: any[];
@@ -262,6 +263,33 @@ export default function MetricsPanel({ apiVersion = "v3" }: Props) {
   const ts = data.training_summary;
   const vs = data.validation_summary;
   const bs = data.battery_stats;
+  const ds = data.dataset_info;
+  const dsSummary = ds?.summary;
+  const dsValidationChecks = ds?.validation?.checks ?? {};
+
+  const dsTempGroups = useMemo(() => {
+    if (!dsSummary?.temperature_groups || typeof dsSummary.temperature_groups !== "object") return [];
+    return Object.keys(dsSummary.temperature_groups)
+      .map((k) => Number(k))
+      .filter((n) => Number.isFinite(n))
+      .sort((a, b) => a - b);
+  }, [dsSummary]);
+
+  const dsCycleTypeRows = useMemo(() => {
+    if (!dsSummary?.cycle_types || typeof dsSummary.cycle_types !== "object") return [];
+    return Object.entries(dsSummary.cycle_types).map(([name, value]) => ({ name, value }));
+  }, [dsSummary]);
+
+  const dsFeatureRows = useMemo(() => {
+    if (!ds?.feature_sets || typeof ds.feature_sets !== "object") return [];
+    return Object.entries(ds.feature_sets) as [string, string[]][];
+  }, [ds]);
+
+  const sohStats = bs ? {
+    min: bs.min_soh,
+    avg: bs.avg_soh,
+    max: bs.max_soh,
+  } : null;
 
   return (
     <div className="space-y-6">
@@ -537,11 +565,26 @@ export default function MetricsPanel({ apiVersion = "v3" }: Props) {
         <>
           {/* Validation Summary Cards */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <StatCard icon={<FlaskConical className="w-4 h-4" />} label="Test Samples" value={vs?.test_samples ?? "—"} color="text-blue-400" />
-            <StatCard icon={<Zap className="w-4 h-4" />} label="Test Batteries" value={vs?.test_batteries ?? "—"} color="text-cyan-400" />
+            <StatCard icon={<FlaskConical className="w-4 h-4" />} label="Test Samples" value={vs?.test_samples ?? dsSummary?.records_total?.toLocaleString?.() ?? "—"} color="text-blue-400" />
+            <StatCard icon={<Zap className="w-4 h-4" />} label="Test Batteries" value={vs?.test_batteries ?? dsSummary?.batteries_total ?? "—"} color="text-cyan-400" />
             <StatCard icon={<CheckCircle2 className="w-4 h-4" />} label="Passed ≥95%" value={vs?.models_passed_95pct ?? "—"} color="text-green-400" />
             <StatCard icon={<BarChart2 className="w-4 h-4" />} label="Avg ±5% Acc" value={vs?.mean_within_5pct != null ? `${vs.mean_within_5pct.toFixed(1)}%` : "—"} color="text-yellow-400" />
           </div>
+
+          {Object.keys(dsValidationChecks).length > 0 && (
+            <div className="bg-gray-900 rounded-xl p-6 border border-gray-800">
+              <h3 className="text-sm font-semibold text-gray-400 uppercase mb-4">Dataset Validation Checks</h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                {Object.entries(dsValidationChecks).map(([name, vals]: [string, any]) => (
+                  <div key={name} className="bg-gray-800 rounded-lg p-4 border border-gray-700">
+                    <div className="text-xs text-gray-400 mb-1 uppercase">{name.replace(/_/g, " ")}</div>
+                    <div className="text-sm text-green-400 font-semibold">Valid: {vals?.valid ?? 0}</div>
+                    <div className="text-sm text-red-400 font-semibold">Invalid: {vals?.invalid ?? 0}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
 
           {/* Validation Results Chart */}
           {validationSorted.length > 0 && (
@@ -787,21 +830,30 @@ export default function MetricsPanel({ apiVersion = "v3" }: Props) {
       )}
 
       {/* ═══════ DATASET ═══════ */}
-      {activeSection === "dataset" && bs && (
+      {activeSection === "dataset" && (bs || ds) && (
         <>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <StatCard icon={<Database className="w-4 h-4" />} label="Total Samples" value={bs.total_samples?.toLocaleString() ?? "—"} color="text-blue-400" />
-            <StatCard icon={<Zap className="w-4 h-4" />} label="Batteries" value={bs.batteries ?? "—"} color="text-green-400" />
-            <StatCard icon={<TrendingUp className="w-4 h-4" />} label="Avg SOH" value={bs.avg_soh != null ? `${bs.avg_soh}%` : "—"} color="text-green-400" />
-            <StatCard icon={<TrendingDown className="w-4 h-4" />} label="Min SOH" value={bs.min_soh != null ? `${bs.min_soh}%` : "—"} color="text-red-400" />
+            <StatCard icon={<Database className="w-4 h-4" />} label="Total Samples" value={dsSummary?.records_total?.toLocaleString?.() ?? bs?.total_samples?.toLocaleString?.() ?? "—"} color="text-blue-400" />
+            <StatCard icon={<Zap className="w-4 h-4" />} label="Batteries" value={dsSummary?.batteries_total ?? bs?.batteries ?? "—"} color="text-green-400" />
+            <StatCard icon={<TrendingUp className="w-4 h-4" />} label="Discharge Cycles" value={dsSummary?.discharge_cycles?.toLocaleString?.() ?? "—"} color="text-green-400" />
+            <StatCard icon={<TrendingDown className="w-4 h-4" />} label="Data Files" value={dsSummary?.data_files ?? "—"} color="text-red-400" />
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             {/* Feature List */}
             <div className="bg-gray-900 rounded-xl p-6 border border-gray-800">
-              <h3 className="text-sm font-semibold text-gray-400 uppercase mb-4">Engineered Features ({bs.feature_columns?.length ?? 0})</h3>
-              <div className="grid grid-cols-2 gap-2">
-                {(bs.feature_columns || []).map((col: string) => (
+              <h3 className="text-sm font-semibold text-gray-400 uppercase mb-4">Engineered Features</h3>
+              <div className="space-y-3">
+                {dsFeatureRows.length > 0 ? dsFeatureRows.map(([name, cols]) => (
+                  <div key={name} className="bg-gray-800 rounded p-3">
+                    <div className="text-xs text-gray-400 uppercase mb-2">{name.replace(/_/g, " ")}</div>
+                    <div className="flex flex-wrap gap-2">
+                      {cols.map((col: string) => (
+                        <span key={`${name}-${col}`} className="bg-gray-700 rounded px-2 py-1 text-xs text-gray-200 font-mono">{col}</span>
+                      ))}
+                    </div>
+                  </div>
+                )) : (bs?.feature_columns || []).map((col: string) => (
                   <div key={col} className="bg-gray-800 rounded px-3 py-1.5 text-sm text-gray-300 font-mono">{col}</div>
                 ))}
               </div>
@@ -811,7 +863,7 @@ export default function MetricsPanel({ apiVersion = "v3" }: Props) {
             <div className="bg-gray-900 rounded-xl p-6 border border-gray-800">
               <h3 className="text-sm font-semibold text-gray-400 uppercase mb-4">Temperature Groups</h3>
               <div className="flex flex-wrap gap-3">
-                {(bs.temp_groups || []).map((t: number) => (
+                {(dsTempGroups.length ? dsTempGroups : (bs?.temp_groups || [])).map((t: number) => (
                   <div key={t} className="bg-gray-800 rounded-lg px-4 py-3 text-center">
                     <div className="text-2xl font-bold text-blue-400">{t}°C</div>
                     <div className="text-xs text-gray-400">Group</div>
@@ -822,8 +874,22 @@ export default function MetricsPanel({ apiVersion = "v3" }: Props) {
 
             {/* Degradation Distribution */}
             <div className="bg-gray-900 rounded-xl p-6 border border-gray-800">
-              <h3 className="text-sm font-semibold text-gray-400 uppercase mb-4">Degradation State Distribution</h3>
-              {bs.degradation_distribution && (
+              <h3 className="text-sm font-semibold text-gray-400 uppercase mb-4">Cycle Type Distribution</h3>
+              {dsCycleTypeRows.length > 0 ? (
+                <ResponsiveContainer width="100%" height={250}>
+                  <BarChart data={dsCycleTypeRows}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
+                    <XAxis dataKey="name" stroke="#9ca3af" />
+                    <YAxis stroke="#9ca3af" />
+                    <Tooltip contentStyle={{ backgroundColor: "#1f2937", border: "1px solid #374151" }} />
+                    <Bar dataKey="value" name="Rows" fill="#22c55e" radius={[4, 4, 0, 0]}>
+                      {dsCycleTypeRows.map((_, i) => (
+                        <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} />
+                      ))}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              ) : bs?.degradation_distribution ? (
                 <ResponsiveContainer width="100%" height={250}>
                   <BarChart data={Object.entries(bs.degradation_distribution).map(([name, value]) => ({ name: name === "0" ? "Healthy" : name === "1" ? "Moderate" : name === "2" ? "Degraded" : `State ${name}`, value }))}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
@@ -837,33 +903,44 @@ export default function MetricsPanel({ apiVersion = "v3" }: Props) {
                     </Bar>
                   </BarChart>
                 </ResponsiveContainer>
-              )}
+              ) : null}
             </div>
 
             {/* Dataset Stats */}
             <div className="bg-gray-900 rounded-xl p-6 border border-gray-800">
-              <h3 className="text-sm font-semibold text-gray-400 uppercase mb-4">SOH Range</h3>
+              <h3 className="text-sm font-semibold text-gray-400 uppercase mb-4">SOH / Capacity Summary</h3>
               <div className="space-y-4">
-                <div className="bg-gray-800 rounded-lg p-4">
-                  <div className="flex justify-between text-sm text-gray-400 mb-2">
-                    <span>Min: {bs.min_soh}%</span>
-                    <span>Avg: {bs.avg_soh}%</span>
-                    <span>Max: {bs.max_soh}%</span>
+                {sohStats ? (
+                  <div className="bg-gray-800 rounded-lg p-4">
+                    <div className="flex justify-between text-sm text-gray-400 mb-2">
+                      <span>Min: {sohStats.min}%</span>
+                      <span>Avg: {sohStats.avg}%</span>
+                      <span>Max: {sohStats.max}%</span>
+                    </div>
+                    <div className="h-4 bg-gray-700 rounded-full overflow-hidden relative">
+                      <div
+                        className="h-full bg-linear-to-r from-red-500 via-yellow-500 to-green-500 rounded-full"
+                        style={{ width: `${sohStats.max}%` }}
+                      />
+                      <div
+                        className="absolute top-0 h-full w-0.5 bg-white"
+                        style={{ left: `${sohStats.avg}%` }}
+                      />
+                    </div>
                   </div>
-                  <div className="h-4 bg-gray-700 rounded-full overflow-hidden relative">
-                    <div
-                      className="h-full bg-linear-to-r from-red-500 via-yellow-500 to-green-500 rounded-full"
-                      style={{ width: `${bs.max_soh}%` }}
-                    />
-                    <div
-                      className="absolute top-0 h-full w-0.5 bg-white"
-                      style={{ left: `${bs.avg_soh}%` }}
-                    />
-                  </div>
-                </div>
+                ) : null}
                 <div className="bg-gray-800 rounded-lg p-4">
-                  <div className="text-sm text-gray-400 mb-1">Average RUL</div>
-                  <div className="text-2xl font-bold text-blue-400">{bs.avg_rul} cycles</div>
+                  <div className="text-sm text-gray-400 mb-1">Capacity (Physical Range)</div>
+                  <div className="text-2xl font-bold text-blue-400">
+                    {ds?.numeric_statistics?.Capacity_physical?.mean != null
+                      ? `${Number(ds.numeric_statistics.Capacity_physical.mean).toFixed(3)} Ah`
+                      : "—"}
+                  </div>
+                  <div className="text-xs text-gray-500 mt-1">
+                    min {ds?.numeric_statistics?.Capacity_physical?.min != null ? Number(ds.numeric_statistics.Capacity_physical.min).toFixed(3) : "—"}
+                    {" · "}
+                    max {ds?.numeric_statistics?.Capacity_physical?.max != null ? Number(ds.numeric_statistics.Capacity_physical.max).toFixed(3) : "—"}
+                  </div>
                 </div>
               </div>
             </div>
