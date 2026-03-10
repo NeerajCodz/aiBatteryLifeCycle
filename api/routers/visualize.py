@@ -24,9 +24,8 @@ _PROJECT = Path(__file__).resolve().parents[2]
 _ARTIFACTS = _PROJECT / "artifacts"
 _FIGURES = _ARTIFACTS / "figures"
 _DATASET = _PROJECT / "cleaned_dataset"
-_V2_RESULTS = _ARTIFACTS / "v2" / "results"
-_V2_REPORTS = _ARTIFACTS / "v2" / "reports"
-_V2_FIGURES = _ARTIFACTS / "v2" / "figures"
+
+_SUPPORTED_VERSIONS = {"v1", "v2", "v3"}
 
 
 # ── Dashboard aggregate ──────────────────────────────────────────────────────
@@ -158,60 +157,112 @@ def _safe_read_json(path: Path) -> dict:
         return json.load(f)
 
 
-@router.get("/metrics")
-async def get_metrics():
-    """Return comprehensive model metrics data from v2 artifacts for the Metrics dashboard."""
-    # Unified results (all models)
-    unified = _safe_read_csv(_V2_RESULTS / "unified_results.csv")
-    # Classical results (v2 retrained)
-    classical_v2 = _safe_read_csv(_V2_RESULTS / "classical_results.csv")
-    # Classical SOH results (v1)
-    classical_soh = _safe_read_csv(_V2_RESULTS / "classical_soh_results.csv")
-    # LSTM results
-    lstm_results = _safe_read_csv(_V2_RESULTS / "lstm_soh_results.csv")
-    # Ensemble results
-    ensemble_results = _safe_read_csv(_V2_RESULTS / "ensemble_results.csv")
-    # Transformer results
-    transformer_results = _safe_read_csv(_V2_RESULTS / "transformer_soh_results.csv")
-    # Validation
-    validation = _safe_read_csv(_V2_RESULTS / "model_validation.csv")
-    # Final rankings
-    rankings = _safe_read_csv(_V2_RESULTS / "final_rankings.csv")
-    # Classical RUL results
-    classical_rul = _safe_read_csv(_V2_RESULTS / "classical_rul_results.csv")
+def _safe_read_csv_first(paths: list[Path]) -> list[dict]:
+    for path in paths:
+        if path.exists():
+            return _safe_read_csv(path)
+    return []
 
-    # JSON summaries
-    training_summary = _safe_read_json(_V2_RESULTS / "training_summary.json")
-    validation_summary = _safe_read_json(_V2_RESULTS / "validation_summary.json")
-    intra_battery = _safe_read_json(_V2_RESULTS / "intra_battery.json")
-    vae_lstm = _safe_read_json(_V2_RESULTS / "vae_lstm_results.json")
-    dg_itransformer = _safe_read_json(_V2_RESULTS / "dg_itransformer_results.json")
 
-    # Available v2 figures
-    v2_figures = []
-    if _V2_FIGURES.exists():
-        v2_figures = sorted([f.name for f in _V2_FIGURES.iterdir() if f.is_file() and f.suffix in ('.png', '.svg')])
+def _safe_read_json_first(paths: list[Path]) -> dict:
+    for path in paths:
+        if path.exists():
+            return _safe_read_json(path)
+    return {}
 
-    # Battery features summary
-    features_path = _V2_RESULTS / "battery_features.csv"
-    battery_stats = {}
-    if features_path.exists():
-        df = pd.read_csv(features_path)
-        battery_stats = {
-            "total_samples": len(df),
-            "batteries": int(df["battery_id"].nunique()),
+
+def _version_root(version: str) -> Path:
+    return _ARTIFACTS / version
+
+
+def _ensure_version(version: str) -> None:
+    if version not in _SUPPORTED_VERSIONS:
+        raise HTTPException(400, f"Unknown version '{version}'")
+
+
+def _version_figures(version: str) -> list[str]:
+    fig_dir = _version_root(version) / "figures"
+    if not fig_dir.exists():
+        return []
+    return sorted([f.name for f in fig_dir.iterdir() if f.is_file() and f.suffix.lower() in (".png", ".svg", ".jpg", ".jpeg", ".webp")])
+
+
+def _battery_stats_for_version(version: str) -> dict:
+    root = _version_root(version)
+    features_candidates = [
+        root / "features" / "battery_features.csv",
+        root / "results" / "battery_features.csv",
+    ]
+    features_path = next((p for p in features_candidates if p.exists()), None)
+    if not features_path:
+        return {}
+    df = pd.read_csv(features_path)
+    stats = {
+        "total_samples": len(df),
+        "batteries": int(df["battery_id"].nunique()) if "battery_id" in df.columns else 0,
+        "feature_columns": [
+            c for c in df.columns.tolist()
+            if c not in ["battery_id", "datetime", "SoH", "RUL", "degradation_state"]
+        ],
+    }
+    if "SoH" in df.columns:
+        stats.update({
             "avg_soh": round(float(df["SoH"].mean()), 2),
             "min_soh": round(float(df["SoH"].min()), 2),
             "max_soh": round(float(df["SoH"].max()), 2),
-            "avg_rul": round(float(df["RUL"].mean()), 1),
-            "feature_columns": [c for c in df.columns.tolist() if c not in ["battery_id", "datetime"]],
-            "degradation_distribution": json.loads(df["degradation_state"].value_counts().to_json()),
-            "temp_groups": sorted(df["ambient_temperature"].unique().tolist()),
-        }
+        })
+    if "RUL" in df.columns:
+        stats["avg_rul"] = round(float(df["RUL"].mean()), 1)
+    if "degradation_state" in df.columns:
+        stats["degradation_distribution"] = json.loads(df["degradation_state"].value_counts().to_json())
+    if "ambient_temperature" in df.columns:
+        stats["temp_groups"] = sorted(df["ambient_temperature"].dropna().unique().tolist())
+    return stats
+
+
+def _build_metrics_payload(version: str) -> dict:
+    _ensure_version(version)
+    root = _version_root(version)
+    results = root / "results"
+    reports = root / "reports"
+    models_meta = _safe_read_json(root / "models.json")
+
+    unified = _safe_read_csv_first([results / "unified_results.csv"])
+    classical_results = _safe_read_csv_first([
+        results / "classical_results.csv",
+        results / "classical_soh_results.csv",
+    ])
+    classical_soh = _safe_read_csv_first([results / "classical_soh_results.csv"])
+    lstm_results = _safe_read_csv_first([results / "lstm_soh_results.csv"])
+    ensemble_results = _safe_read_csv_first([results / "ensemble_results.csv"])
+    transformer_results = _safe_read_csv_first([results / "transformer_soh_results.csv"])
+    validation = _safe_read_csv_first([
+        results / "model_validation.csv",
+        reports / "model_validation.csv",
+    ])
+    rankings = _safe_read_csv_first([results / "final_rankings.csv"])
+    classical_rul = _safe_read_csv_first([results / "classical_rul_results.csv"])
+
+    training_summary = _safe_read_json_first([
+        results / "training_summary.json",
+        reports / "training_summary.json",
+    ])
+    validation_summary = _safe_read_json_first([
+        results / "validation_summary.json",
+        reports / "validation_summary.json",
+    ])
+    intra_battery = _safe_read_json_first([
+        results / "intra_battery.json",
+        reports / "intra_battery.json",
+    ])
+    vae_lstm = _safe_read_json_first([results / "vae_lstm_results.json"])
+    dg_itransformer = _safe_read_json_first([results / "dg_itransformer_results.json"])
 
     return {
+        "version": version,
+        "models_meta": models_meta,
         "unified_results": unified,
-        "classical_v2": classical_v2,
+        "classical_results": classical_results,
         "classical_soh": classical_soh,
         "lstm_results": lstm_results,
         "ensemble_results": ensemble_results,
@@ -224,20 +275,49 @@ async def get_metrics():
         "intra_battery": intra_battery,
         "vae_lstm": vae_lstm,
         "dg_itransformer": dg_itransformer,
-        "v2_figures": v2_figures,
-        "battery_stats": battery_stats,
+        "figures": _version_figures(version),
+        "battery_stats": _battery_stats_for_version(version),
     }
 
 
-@router.get("/v2/figures/{filename}")
-async def get_v2_figure(filename: str):
-    """Serve a saved figure from artifacts/v2/figures."""
-    path = _V2_FIGURES / filename
+@router.get("/metrics")
+async def get_metrics():
+    """Default metrics endpoint: latest version (v3)."""
+    return _build_metrics_payload("v3")
+
+
+@router.get("/{version}/metrics")
+async def get_metrics_for_version(version: str):
+    """Return version-aware metrics payload from artifacts/{version}."""
+    return _build_metrics_payload(version)
+
+
+@router.get("/{version}/figures")
+async def list_version_figures(version: str):
+    _ensure_version(version)
+    return _version_figures(version)
+
+
+@router.get("/{version}/figures/{filename}")
+async def get_version_figure(version: str, filename: str):
+    """Serve saved figures from artifacts/{version}/figures."""
+    _ensure_version(version)
+    path = _version_root(version) / "figures" / filename
     if not path.exists():
-        raise HTTPException(404, f"Figure {filename} not found")
+        raise HTTPException(404, f"Figure {filename} not found for {version}")
     content_type = "image/png"
     if path.suffix == ".html":
         content_type = "text/html"
     elif path.suffix == ".svg":
         content_type = "image/svg+xml"
+    elif path.suffix.lower() in (".jpg", ".jpeg"):
+        content_type = "image/jpeg"
+    elif path.suffix.lower() == ".webp":
+        content_type = "image/webp"
     return FileResponse(path, media_type=content_type)
+
+
+@router.get("/v2/figures/{filename}")
+async def get_v2_figure(filename: str):
+    """Backward-compatible alias for v2 figure endpoint."""
+    return await get_version_figure("v2", filename)

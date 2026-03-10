@@ -12,7 +12,7 @@ RUN npm run build
 # ─────────────────────────────────────────────────────────────
 # Stage 2: Python runtime
 # ─────────────────────────────────────────────────────────────
-FROM python:3.11-slim AS runtime
+FROM python:3.12-slim AS runtime
 
 ENV DEBIAN_FRONTEND=noninteractive \
     PYTHONUNBUFFERED=1 \

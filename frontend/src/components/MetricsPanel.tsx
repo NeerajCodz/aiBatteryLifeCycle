@@ -14,8 +14,10 @@ import {
 import { fetchMetrics } from "../api";
 
 interface MetricsData {
+  version?: string;
+  models_meta?: any;
   unified_results: any[];
-  classical_v2: any[];
+  classical_results: any[];
   classical_soh: any[];
   lstm_results: any[];
   ensemble_results: any[];
@@ -28,7 +30,7 @@ interface MetricsData {
   intra_battery: any;
   vae_lstm: any;
   dg_itransformer: any;
-  v2_figures: string[];
+  figures: string[];
   battery_stats: any;
 }
 
@@ -102,6 +104,7 @@ export default function MetricsPanel() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [activeSection, setActiveSection] = useState<string>("overview");
+  const [activeVersion, setActiveVersion] = useState<"v1" | "v2" | "v3">("v3");
   const [selectedFigure, setSelectedFigure] = useState<string | null>(null);
   const [figureSearch, setFigureSearch] = useState("");
   const [sortBy, setSortBy] = useState<MetricKey>("R2");
@@ -112,11 +115,13 @@ export default function MetricsPanel() {
   const [chartView, setChartView] = useState<"bar" | "radar" | "scatter">("bar");
 
   useEffect(() => {
-    fetchMetrics()
+    setLoading(true);
+    setError(null);
+    fetchMetrics(activeVersion)
       .then(setData)
       .catch((e) => setError(e.message))
       .finally(() => setLoading(false));
-  }, []);
+  }, [activeVersion]);
 
   const sections = [
     { key: "overview", label: "Overview", icon: <GanttChart className="w-4 h-4" /> },
@@ -134,8 +139,8 @@ export default function MetricsPanel() {
   }, [data]);
 
   const classicalV2Sorted = useMemo(() => {
-    if (!Array.isArray(data?.classical_v2)) return [];
-    return [...data!.classical_v2].sort((a, b) => (b.r2 ?? b.R2 ?? 0) - (a.r2 ?? a.R2 ?? 0));
+    if (!Array.isArray(data?.classical_results)) return [];
+    return [...data!.classical_results].sort((a, b) => (b.r2 ?? b.R2 ?? 0) - (a.r2 ?? a.R2 ?? 0));
   }, [data]);
 
   const validationSorted = useMemo(() => {
@@ -192,10 +197,10 @@ export default function MetricsPanel() {
   }, [unifiedSorted]);
 
   const filteredFigures = useMemo(() => {
-    if (!data?.v2_figures) return [];
-    if (!figureSearch) return data.v2_figures;
+    if (!data?.figures) return [];
+    if (!figureSearch) return data.figures;
     const q = figureSearch.toLowerCase();
-    return data.v2_figures.filter((f) => f.toLowerCase().includes(q));
+    return data.figures.filter((f) => f.toLowerCase().includes(q));
   }, [data, figureSearch]);
 
   const filteredModels = useMemo(() => {
@@ -245,7 +250,6 @@ export default function MetricsPanel() {
   // Normalise possibly-null array fields (API may return null instead of [])
   const lstmResults     = Array.isArray(data.lstm_results)     ? data.lstm_results     : [];
   const ensembleResults = Array.isArray(data.ensemble_results) ? data.ensemble_results : [];
-  const transformerRes  = Array.isArray(data.transformer_results) ? data.transformer_results : [];
 
   const ts = data.training_summary;
   const vs = data.validation_summary;
@@ -266,6 +270,21 @@ export default function MetricsPanel() {
         ))}
       </div>
 
+      <div className="flex items-center gap-2 bg-gray-950 p-2 rounded-xl border border-gray-800 w-fit">
+        <span className="text-xs text-gray-400 px-1">Metrics Version</span>
+        {(["v1", "v2", "v3"] as const).map((v) => (
+          <button
+            key={v}
+            onClick={() => setActiveVersion(v)}
+            className={`px-3 py-1.5 rounded text-xs font-medium transition-colors ${
+              activeVersion === v ? "bg-emerald-600 text-white" : "bg-gray-800 text-gray-300 hover:bg-gray-700"
+            }`}
+          >
+            {v.toUpperCase()}
+          </button>
+        ))}
+      </div>
+
       {/* Figure lightbox */}
       {selectedFigure && (
         <div className="fixed inset-0 z-100 flex items-center justify-center bg-black/80 backdrop-blur-sm" onClick={() => setSelectedFigure(null)}>
@@ -276,7 +295,7 @@ export default function MetricsPanel() {
                 <X className="w-5 h-5" />
               </button>
             </div>
-            <img src={`/api/v2/figures/${selectedFigure}`} alt={selectedFigure} className="rounded-lg max-w-full" />
+            <img src={`/api/${activeVersion}/figures/${selectedFigure}`} alt={selectedFigure} className="rounded-lg max-w-full" />
           </div>
         </div>
       )}
@@ -284,7 +303,7 @@ export default function MetricsPanel() {
       {/* ═══════ OVERVIEW ═══════ */}
       {activeSection === "overview" && unifiedSorted.length === 0 && (
         <div className="bg-yellow-900/20 border border-yellow-800 rounded-xl p-6 text-center text-yellow-300 text-sm">
-          ⚠ No model metrics found. Make sure the backend is running and artifacts are present in <code className="bg-yellow-900/40 px-1 rounded">artifacts/v2/</code>.
+          ⚠ No model metrics found. Make sure the backend is running and artifacts are present in <code className="bg-yellow-900/40 px-1 rounded">{`artifacts/${activeVersion}/`}</code>.
         </div>
       )}
       {activeSection === "overview" && (
@@ -437,10 +456,10 @@ export default function MetricsPanel() {
             </ResponsiveContainer>
           </div>
 
-          {/* v2 Classical Results */}
+          {/* Classical Results */}
           {classicalV2Sorted.length > 0 && (
             <div className="bg-gray-900 rounded-xl p-6 border border-gray-800">
-              <h3 className="text-sm font-semibold text-gray-400 uppercase mb-4">v2 Classical Models (Intra-Battery Split)</h3>
+              <h3 className="text-sm font-semibold text-gray-400 uppercase mb-4">{activeVersion.toUpperCase()} Classical Models</h3>
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 <ResponsiveContainer width="100%" height={300}>
                   <BarChart data={classicalV2Sorted}>
@@ -848,7 +867,7 @@ export default function MetricsPanel() {
       {activeSection === "figures" && (
         <>
           <div className="flex items-center gap-3 bg-gray-900 p-3 rounded-xl border border-gray-800 mb-4">
-            <Search className="w-4 h-4 text-gray-400 flex-shrink-0" />
+            <Search className="w-4 h-4 text-gray-400 shrink-0" />
             <input
               type="text"
               value={figureSearch}
@@ -868,7 +887,7 @@ export default function MetricsPanel() {
               >
                 <div className="aspect-4/3 bg-gray-800 overflow-hidden">
                   <img
-                    src={`/api/v2/figures/${fig}`}
+                    src={`/api/${activeVersion}/figures/${fig}`}
                     alt={fig}
                     className="w-full h-full object-contain group-hover:scale-105 transition-transform"
                     loading="lazy"

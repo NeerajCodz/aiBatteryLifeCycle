@@ -611,12 +611,12 @@ export default function SimulationPanel() {
   // --- Config state ---
   const [batteryConfigs, setBatteryConfigs] = useState<BatterySimConfig[]>(DEFAULT_BATTERIES);
   const [steps, setSteps]                   = useState(300);
-  const [timeUnit, setTimeUnit]             = useState("day");
+  const [timeUnit, setTimeUnit]             = useState("cycle");
   const [eolThreshold, setEolThreshold]     = useState(70);
 
   // --- Simulation results ---
   const [results, setResults]             = useState<BatterySimResult[]>([]);
-  const [timeUnitLabel, setTimeUnitLabel] = useState("Days");
+  const [timeUnitLabel, setTimeUnitLabel] = useState("Cycles");
   const [isSimulating, setIsSimulating]   = useState(false);
   const [modelUsed, setModelUsed]         = useState<string | null>(null);
   const [selectedModel, setSelectedModel] = useState<string>("best_ensemble");

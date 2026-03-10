@@ -159,9 +159,13 @@ export const fetchModelVersions = () =>
 export const fetchFigures = () =>
   baseApi.get<string[]>("/figures").then((r) => r.data);
 
-/** Comprehensive model metrics from v2 artifacts. */
-export const fetchMetrics = () =>
-  baseApi.get<any>("/metrics").then((r) => r.data);
+/** Comprehensive metrics payload for a specific version (v1/v2/v3). */
+export const fetchMetrics = (version: "v1" | "v2" | "v3" = "v3") =>
+  baseApi.get<any>(`/${version}/metrics`).then((r) => r.data);
+
+/** Versioned figures list from artifacts/{version}/figures. */
+export const fetchVersionFigures = (version: "v1" | "v2" | "v3") =>
+  baseApi.get<string[]>(`/${version}/figures`).then((r) => r.data);
 
 // ── Simulation types ────────────────────────────────────────────────────────
 export interface BatterySimConfig {

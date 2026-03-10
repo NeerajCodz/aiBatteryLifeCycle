@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import SimulationPanel from "./components/SimulationPanel";
 import PredictionForm from "./components/PredictionForm";
 import GraphPanel from "./components/GraphPanel";
@@ -7,7 +7,7 @@ import MetricsPanel from "./components/MetricsPanel";
 import ResearchPaper from "./components/ResearchPaper";
 import VersionSelector from "./components/VersionSelector";
 import { ToastProvider } from "./components/Toast";
-import { getApiVersion, setApiVersion } from "./api";
+import { fetchVersionModelsMeta, getApiVersion, setApiVersion } from "./api";
 import { BatteryCharging } from "lucide-react";
 
 type Tab = "simulation" | "predict" | "graphs" | "recommend" | "metrics" | "paper";
@@ -20,6 +20,15 @@ export default function App() {
     setApiVersion(v);
     setVersion(v);
   };
+
+  useEffect(() => {
+    // Warm metadata cache for all versions (models.json) without loading model weights.
+    Promise.allSettled([
+      fetchVersionModelsMeta("v1"),
+      fetchVersionModelsMeta("v2"),
+      fetchVersionModelsMeta("v3"),
+    ]).catch(() => undefined);
+  }, []);
 
   const tabs: { key: Tab; label: string }[] = [
     { key: "simulation", label: "Simulation" },
@@ -72,7 +81,7 @@ export default function App() {
         {activeTab === "simulation" && <SimulationPanel />}
         {activeTab === "predict" && <PredictionForm />}
         {activeTab === "graphs" && <GraphPanel />}
-        {activeTab === "recommend" && <RecommendationPanel />}
+        {activeTab === "recommend" && <RecommendationPanel apiVersion={apiVersion} />}
         {activeTab === "metrics" && <MetricsPanel />}
         {activeTab === "paper" && <ResearchPaper />}
       </main>

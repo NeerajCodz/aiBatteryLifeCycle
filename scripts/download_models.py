@@ -101,6 +101,20 @@ def download_version(version: str) -> None:
     print(f"[download_models] {version}/ ready")
 
 
+def download_models_meta_only(versions: list[str]) -> None:
+    """Download only models.json for listed versions."""
+    _ensure_hub()
+    from huggingface_hub import snapshot_download
+    ARTIFACTS_DIR.mkdir(parents=True, exist_ok=True)
+    allow = [f"{v}/models.json" for v in versions]
+    print(f"[download_models] Downloading metadata files: {allow}")
+    snapshot_download(**_hf_kwargs(
+        allow_patterns=allow,
+        ignore_patterns=["*.log"],
+    ))
+    print("[download_models] Metadata ready")
+
+
 def download_all() -> None:
     """Download all versions (v1 + v2 + v3) from HF Hub."""
     _ensure_hub()
@@ -126,7 +140,11 @@ def main() -> None:
             download_version(args.version)
         return
 
-    # Default: only download v3 (latest) — v1/v2 downloaded on-demand via API
+    # Default: ensure models.json exists for all versions, but download only
+    # latest (v3) heavy model artifacts at startup.
+    download_models_meta_only(["v1", "v2", "v3"])
+
+    # Then fetch v3 artifacts if key models are missing.
     if already_downloaded("v3"):
         print("[download_models] v3 artifacts already present — skipping download")
         return

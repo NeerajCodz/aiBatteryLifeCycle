@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useEffect, useState, useMemo } from "react";
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer,
   CartesianGrid, RadarChart, Radar, PolarGrid, PolarAngleAxis, PolarRadiusAxis,
@@ -46,7 +46,11 @@ function SliderInput({ label, value, min, max, step, unit, onChange }: {
   );
 }
 
-export default function RecommendationPanel() {
+type Props = {
+  apiVersion: "v1" | "v2" | "v3";
+};
+
+export default function RecommendationPanel({ apiVersion }: Props) {
   const [batteryId, setBatteryId] = useState("B0005");
   const [currentCycle, setCurrentCycle] = useState(100);
   const [currentSoh, setCurrentSoh] = useState(85);
@@ -60,12 +64,12 @@ export default function RecommendationPanel() {
   const [expandedRow, setExpandedRow] = useState<number | null>(null);
   const [chartTab, setChartTab] = useState<"rul" | "params" | "radar">("rul");
 
-  // Fetch available models on mount
-  useState(() => {
+  // Fetch available loaded models for selector
+  useEffect(() => {
     fetchModels()
       .then((m) => setModels(m.filter((mo) => mo.loaded)))
-      .catch(() => {});
-  });
+      .catch(() => setModels([]));
+  }, [apiVersion]);
 
   const handleSubmit = async () => {
     setLoading(true);
@@ -208,7 +212,7 @@ export default function RecommendationPanel() {
 
         {error && (
           <div className="mt-3 flex items-start gap-2 text-sm text-red-400 bg-red-900/20 border border-red-800 p-3 rounded-lg">
-            <AlertTriangle className="w-4 h-4 flex-shrink-0 mt-0.5" />
+            <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
             {error}
           </div>
         )}
@@ -392,7 +396,7 @@ export default function RecommendationPanel() {
                           <tr key={`${rec.rank}-exp`} className="border-b border-gray-800/40 bg-gray-950/50">
                             <td colSpan={8} className="px-4 py-3">
                               <div className="flex items-start gap-2">
-                                <Info className="w-4 h-4 text-blue-400 flex-shrink-0 mt-0.5" />
+                                <Info className="w-4 h-4 text-blue-400 shrink-0 mt-0.5" />
                                 <p className="text-xs text-gray-400 leading-relaxed">{rec.explanation}</p>
                               </div>
                               <div className="mt-2 flex gap-4">
