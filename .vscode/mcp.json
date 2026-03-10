@@ -1,0 +1,20 @@
+{
+  "servers": {
+    "jupyter-mcp": {
+      "type": "stdio",
+      "command": "E:/VIT/aiBatteryLifecycle/venv/Scripts/python.exe",
+      "args": [
+        "-m",
+        "jupyter_mcp_server",
+        "--provider",
+        "jupyter",
+        "--jupyter-url",
+        "http://127.0.0.1:8888",
+        "--jupyter-token",
+        "MY_TOKEN",
+        "--transport",
+        "stdio"
+      ]
+    }
+  }
+}

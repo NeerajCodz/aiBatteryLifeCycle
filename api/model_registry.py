@@ -226,7 +226,11 @@ class ModelRegistry:
         for p in sorted(cdir.glob("*.joblib")):
             name = p.stem
             # Skip non-model dumps (param search results, classifiers)
-            if "best_params" in name or "classifier" in name:
+            if (
+                "best_params" in name
+                or "classifier" in name
+                or name in {"re_rct_progression"}
+            ):
                 continue
             try:
                 self.models[name] = joblib.load(p)
@@ -420,12 +424,12 @@ class ModelRegistry:
         #   Tree models (RF, ET, GB, XGB, LGB) were fitted on raw numpy X_train
         #                             → NO scaler applied, passed as-is
         #
-        # v3 scalers use a version-prefixed naming scheme:
-        #   {version}_features_standard.joblib  — StandardScaler
-        #   {version}_features_minmax.joblib    — MinMaxScaler (fallback)
+        # Preferred naming is folder-based (artifacts/<version>/scalers/*.joblib).
+        # Keep version-prefixed names as backward-compatible fallbacks.
         scalers_dir = self._scalers_dir
         version_prefix = self.version  # e.g. "v3"
         candidate_linear = (
+            "features_standard.joblib",
             f"{version_prefix}_features_standard.joblib",
             "standard_scaler.joblib",
             "linear_scaler.joblib",
@@ -441,7 +445,9 @@ class ModelRegistry:
                     log.warning("Could not load %s: %s", fname, exc)
         else:
             # Try minmax as last resort (v3 fallback)
-            sp_mm = scalers_dir / f"{version_prefix}_features_minmax.joblib"
+            sp_mm = scalers_dir / "features_minmax.joblib"
+            if not sp_mm.exists():
+                sp_mm = scalers_dir / f"{version_prefix}_features_minmax.joblib"
             if sp_mm.exists():
                 try:
                     self.linear_scaler = joblib.load(sp_mm)
@@ -525,7 +531,7 @@ class ModelRegistry:
             "transformer_soh_results.csv", "ensemble_results.csv",
             "unified_results.csv",
         ):
-            path = self._artifacts / csv_name
+            path = self._artifacts / "results" / csv_name
             if not path.exists():
                 # Fall back to root-level results (backward compat)
                 path = _ARTIFACTS / csv_name
@@ -539,7 +545,7 @@ class ModelRegistry:
             except Exception as exc:
                 log.warning("Could not read %s: %s", csv_name, exc)
         for json_name in ("dg_itransformer_results.json", "vae_lstm_results.json"):
-            path = self._artifacts / json_name
+            path = self._artifacts / "results" / json_name
             if not path.exists():
                 path = _ARTIFACTS / json_name
                 if not path.exists():
@@ -820,7 +826,8 @@ class ModelRegistry:
         -----
         Deep sequence models (PyTorch / Keras) are not batchable here because
         they require multi-timestep tensors.  Callers that request a deep model
-        will get a ``ValueError``; the simulate endpoint falls back to physics.
+        will get a ``ValueError``; the simulate endpoint uses its non-ML
+        fallback path for those cases.
         """
         name = model_name or self.default_model
         if name is None:

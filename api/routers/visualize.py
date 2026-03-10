@@ -164,7 +164,7 @@ async def get_metrics():
     # Unified results (all models)
     unified = _safe_read_csv(_V2_RESULTS / "unified_results.csv")
     # Classical results (v2 retrained)
-    classical_v2 = _safe_read_csv(_V2_RESULTS / "v2_classical_results.csv")
+    classical_v2 = _safe_read_csv(_V2_RESULTS / "classical_results.csv")
     # Classical SOH results (v1)
     classical_soh = _safe_read_csv(_V2_RESULTS / "classical_soh_results.csv")
     # LSTM results
@@ -174,16 +174,16 @@ async def get_metrics():
     # Transformer results
     transformer_results = _safe_read_csv(_V2_RESULTS / "transformer_soh_results.csv")
     # Validation
-    validation = _safe_read_csv(_V2_RESULTS / "v2_model_validation.csv")
+    validation = _safe_read_csv(_V2_RESULTS / "model_validation.csv")
     # Final rankings
     rankings = _safe_read_csv(_V2_RESULTS / "final_rankings.csv")
     # Classical RUL results
     classical_rul = _safe_read_csv(_V2_RESULTS / "classical_rul_results.csv")
 
     # JSON summaries
-    training_summary = _safe_read_json(_V2_RESULTS / "v2_training_summary.json")
-    validation_summary = _safe_read_json(_V2_RESULTS / "v2_validation_summary.json")
-    intra_battery = _safe_read_json(_V2_RESULTS / "v2_intra_battery.json")
+    training_summary = _safe_read_json(_V2_RESULTS / "training_summary.json")
+    validation_summary = _safe_read_json(_V2_RESULTS / "validation_summary.json")
+    intra_battery = _safe_read_json(_V2_RESULTS / "intra_battery.json")
     vae_lstm = _safe_read_json(_V2_RESULTS / "vae_lstm_results.json")
     dg_itransformer = _safe_read_json(_V2_RESULTS / "dg_itransformer_results.json")
 

@@ -48,7 +48,7 @@ artifacts/
 #### Classical Models (V2)
 - **Total:** 14 models
 - **Target Metric:** Within-±5% SOH accuracy ≥ 95%
-- **Current Pass Rate:** See `artifacts/v2/results/v2_validation_report.html`
+- **Current Pass Rate:** See `artifacts/v2/results/validation_report.html`
 
 #### Configuration
 

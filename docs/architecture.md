@@ -31,7 +31,7 @@
 4. **Training:** Notebooks train each model family, save checkpoints to `artifacts/models/`
 5. **Serving:** `model_registry.py` loads all models at startup
 6. **Prediction:** API receives features → registry dispatches to best model → returns SOH/RUL
-7. **Simulation:** `POST /api/v2/simulate` receives multi-battery config → vectorized Arrhenius degradation + ML via `predict_array()` → returns per-step SOH, RUL, and degradation-state history for each battery
+7. **Simulation:** `POST /api/v3/simulate` receives multi-battery config → ML-driven Re/Rct progression + two-pass feature inference via `predict_array()` → returns per-step SOH, RUL, and degradation-state history for each battery
 8. **Visualization:** Frontend fetches results and renders analytics (fleet overview, compare, temperature analysis, recommendations)
 
 ## Model Registry
@@ -50,6 +50,14 @@ The `ModelRegistry` class is instantiated per version (v1, v2, v3):
 - Provides unified `predict()` interface regardless of framework
 - `predict_array(X: np.ndarray, model_name: str)` batch method enables vectorized simulation
 - `_x_for_model()` normalizes input feature extraction for both single-cycle and batch paths
+
+### Simulation Runtime (v3)
+
+- Re/Rct progression is loaded from `artifacts/v3/models/classical/re_rct_progression.joblib` when available.
+- SOH inference runs in two passes:
+  - Pass 1: initial feature matrix predicts provisional SOH trajectory.
+  - Pass 2: `soh_rolling_mean` is recomputed from pass-1 SOH (window=5) and used for final prediction.
+- Fallback mode is a minimal linear degradation approximation when ML prediction is unavailable.
 
 ## Frontend Architecture
 

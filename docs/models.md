@@ -30,7 +30,7 @@ The weighted-average ensemble combines the top classical models (R²-proportiona
 $$\hat{y} = \frac{\sum_{i} w_i \cdot \hat{y}_i}{\sum_{i} w_i}$$
 
 Components and weights are defined in `artifacts/v3/models.json` and loaded dynamically.
-v3 ensemble components: RF, XGB, LGB, ExtraTrees, GradientBoosting.
+v3 ensemble components: XGBoost, RandomForest, ExtraTrees, VanillaLSTM, TFT.
 
 ---
 
@@ -44,6 +44,17 @@ v3 ensemble components: RF, XGB, LGB, ExtraTrees, GradientBoosting.
 | 4 | Random Forest | 0.9814 | 1.10 | 98.8% | Classical |
 | 5 | Best Ensemble | 0.9810 | 1.02 | 99.2% | Ensemble |
 | 6 | ExtraTrees | 0.9701 | 1.38 | 97.8% | Classical |
+
+### v3 Classification Quality (Degradation Classes)
+
+The v3 notebooks now also report degradation-state quality by binning SOH into
+4 classes (`<70`, `70-80`, `80-90`, `>=90`) and computing macro/weighted F1.
+
+| Model | F1 Macro | F1 Weighted | Notes |
+|------|----------|-------------|-------|
+| GradientBoosting | ~0.89 | ~0.94 | Best classical class balance |
+| XGBoost | ~0.92 | ~0.95 | Strong boundary discrimination |
+| Best Ensemble | tracked in NB08/NB09 | tracked in NB08/NB09 | Mixed classical + deep |
 
 ## v2 Results Summary
 

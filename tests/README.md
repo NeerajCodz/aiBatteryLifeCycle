@@ -13,14 +13,14 @@ python tests/test_v2_models.py
 ```
 
 **Output:**
-- `artifacts/v2/results/v2_model_validation.csv` — Full metrics table
-- `artifacts/v2/results/v2_validation_summary.json` — Summary statistics
+- `artifacts/v2/results/model_validation.csv` — Full metrics table
+- `artifacts/v2/results/validation_summary.json` — Summary statistics
 - `artifacts/v2/figures/validation_accuracy_bars.png` — Accuracy ranking chart
 - `artifacts/v2/figures/r2_vs_accuracy.png` — R² vs accuracy scatter plot
 - `artifacts/v2/figures/best_model_analysis.png` — Best model performance
 - `artifacts/v2/figures/per_battery_accuracy.png` — Per-battery accuracy heatmap
-- `artifacts/v2/results/v2_validation_report.html` — HTML report
-- `artifacts/v2/results/v2_validation_report.md` — Markdown report
+- `artifacts/v2/results/validation_report.html` — HTML report
+- `artifacts/v2/results/validation_report.md` — Markdown report
 
 **Target Metrics:**
 - Within-±5% SOH Accuracy ≥ 95% (primary success metric)
@@ -83,4 +83,4 @@ Tests use:
 
 ✓ Model passes if: **Within-±5% Accuracy ≥ 95%**
 
-Current pass rate: See latest report in `artifacts/v2/results/v2_validation_report.html`
+Current pass rate: See latest report in `artifacts/v2/results/validation_report.html`

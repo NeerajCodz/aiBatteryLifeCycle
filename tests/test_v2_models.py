@@ -159,8 +159,8 @@ print(f"{'='*80}")
 
 # ────────────────────── Save Results ────────────────────────────────
 print(f"\n[6/8] Saving results...")
-results_df.to_csv(REPORT_DIR / 'v2_model_validation.csv', index=False)
-with open(REPORT_DIR / 'v2_validation_summary.json', 'w') as f:
+results_df.to_csv(REPORT_DIR / 'model_validation.csv', index=False)
+with open(REPORT_DIR / 'validation_summary.json', 'w') as f:
     json.dump(summary, f, indent=2)
 
 # ────────────────────── Generate Visualizations ────────────────────────────
@@ -329,9 +329,9 @@ html_report = f"""
 </html>
 """
 
-with open(REPORT_DIR / 'v2_validation_report.html', 'w') as f:
+with open(REPORT_DIR / 'validation_report.html', 'w') as f:
     f.write(html_report)
-print(f"  Saved: v2_validation_report.html")
+print(f"  Saved: validation_report.html")
 
 # ────────────────────── Generate Markdown Report ────────────────────────────
 print(f"\n[9/9] Generating markdown report...")
@@ -392,9 +392,9 @@ md_report += f"""
 - **Feature Robustness:** Battery cyclic patterns captured effectively by non-parametric methods
 """
 
-with open(REPORT_DIR / 'v2_validation_report.md', 'w') as f:
+with open(REPORT_DIR / 'validation_report.md', 'w') as f:
     f.write(md_report)
-print(f"  Saved: v2_validation_report.md")
+print(f"  Saved: validation_report.md")
 
 print(f"\n{'='*80}")
 print("✓ Validation complete!")
