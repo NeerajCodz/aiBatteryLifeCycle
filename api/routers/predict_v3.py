@@ -31,7 +31,7 @@ async def predict_v3(req: PredictRequest):
     features["voltage_range"] = features["peak_voltage"] - features["min_voltage"]
 
     try:
-        result = registry_v3.predict(features)
+        result = registry_v3.predict(features, req.model_name)
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc))
 
@@ -107,7 +107,7 @@ async def recommend_v3(req: RecommendationRequest):
         feat = {**base_features, "ambient_temperature": t, "avg_current": c,
                 "min_voltage": v, "voltage_range": 4.19 - v,
                 "avg_temp": t + 8.0}
-        result = registry_v3.predict(feat)
+        result = registry_v3.predict(feat, req.model_name)
         rul = result.get("rul_cycles", 0) or 0
         candidates.append((rul, t, c, v, result["soh_pct"]))
 

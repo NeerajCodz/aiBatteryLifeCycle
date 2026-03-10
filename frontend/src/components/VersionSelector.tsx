@@ -138,6 +138,15 @@ export default function VersionSelector({ activeVersion, onSwitch }: Props) {
     }
   };
 
+  const statusForVersion = (v: VersionInfo) => {
+    const isDownloading = v.status === "downloading" || busy === v.id;
+    const isError = v.status === "error";
+    const isLoaded = v.loaded && v.model_count > 0;
+    const isOnDisk = v.status === "on_disk" || (v.on_disk && !isLoaded && !isDownloading && !isError);
+    const isNotDownloaded = v.status === "not_downloaded" && !v.on_disk;
+    return { isDownloading, isError, isLoaded, isOnDisk, isNotDownloaded };
+  };
+
   // Auto-switch when download completes
   useEffect(() => {
     if (busy) {
@@ -152,8 +161,6 @@ export default function VersionSelector({ activeVersion, onSwitch }: Props) {
 
   const activeDisplay = versions.find((v) => v.id === activeVersion)?.display
     ?? `v${activeVersion[1]}.0`;
-
-  const others = versions.filter((v) => v.id !== activeVersion);
 
   const versionColor = (id: string) => {
     if (id === "v3") return "bg-green-600 text-white hover:bg-green-500";
@@ -179,7 +186,7 @@ export default function VersionSelector({ activeVersion, onSwitch }: Props) {
 
       {open && (
         <div
-          className="absolute right-0 top-full mt-2 w-64
+          className="absolute right-0 top-full mt-2 w-72
             bg-gray-900 border border-gray-700 rounded-xl shadow-2xl z-50
             overflow-hidden"
         >
@@ -187,27 +194,9 @@ export default function VersionSelector({ activeVersion, onSwitch }: Props) {
             Model Versions
           </div>
 
-          {/* Active version row */}
-          <div className="flex items-center justify-between px-3 py-2.5 bg-gray-800/50">
-            <div>
-              <span className="text-sm font-semibold text-white">{activeDisplay}</span>
-              <span className="ml-2 text-xs text-green-400">active</span>
-            </div>
-            <Check className="w-4 h-4 text-green-400 shrink-0" />
-          </div>
-
-          {/* Other versions */}
-          {others.length === 0 && (
-            <div className="px-3 py-3 text-xs text-gray-500 text-center">
-              No other versions available
-            </div>
-          )}
-          {others.map((v) => {
-            const isDownloading = v.status === "downloading" || busy === v.id;
-            const isError = v.status === "error";
-            const isLoaded = v.loaded && v.model_count > 0;
-            const isOnDisk = v.status === "on_disk" || (v.on_disk && !isLoaded && !isDownloading && !isError);
-            const isNotDownloaded = v.status === "not_downloaded" && !v.on_disk;
+          {versions.map((v) => {
+            const { isDownloading, isError, isLoaded, isOnDisk, isNotDownloaded } = statusForVersion(v);
+            const isActiveVersion = v.id === activeVersion;
             const isExpanded = expandedVersion === v.id;
             const models = versionModels[v.id] ?? [];
 
@@ -218,7 +207,10 @@ export default function VersionSelector({ activeVersion, onSwitch }: Props) {
                     hover:bg-gray-800/60 transition-colors"
                 >
                   <div className="flex-1 min-w-0">
-                    <span className="text-sm font-medium text-gray-200">{v.display}</span>
+                    <span className={`text-sm font-medium ${isActiveVersion ? "text-white" : "text-gray-200"}`}>{v.display}</span>
+                    {isActiveVersion && (
+                      <span className="ml-2 text-xs text-green-400 italic">Active Version</span>
+                    )}
                     {v.features && (
                       <span className="ml-2 text-xs text-gray-500">
                         {v.features}f
@@ -246,7 +238,7 @@ export default function VersionSelector({ activeVersion, onSwitch }: Props) {
                   </div>
 
                   <div className="flex items-center gap-1 shrink-0 ml-2">
-                    {isLoaded && (
+                    {isLoaded && !isActiveVersion && (
                       <button
                         onClick={() => handleSwitch(v.id)}
                         className="px-2.5 py-1 rounded text-xs font-medium
@@ -299,10 +291,10 @@ export default function VersionSelector({ activeVersion, onSwitch }: Props) {
 
                     <button
                       onClick={() => handleExpandVersion(v.id)}
-                      className="px-2 py-1 rounded text-xs font-medium bg-gray-800 hover:bg-gray-700 text-gray-300 transition-colors"
-                      title="Show model-level controls"
+                      className="p-1.5 rounded bg-gray-800 hover:bg-gray-700 text-gray-300 transition-colors"
+                      title="Open model submenu"
                     >
-                      {isExpanded ? "Hide Models" : "Models"}
+                      <ChevronRight className={`w-3.5 h-3.5 transition-transform ${isExpanded ? "rotate-90" : ""}`} />
                     </button>
                   </div>
                 </div>
@@ -311,7 +303,7 @@ export default function VersionSelector({ activeVersion, onSwitch }: Props) {
                   <div className="px-3 pb-3">
                     <div className="rounded-lg border border-gray-800 bg-gray-950/50 overflow-hidden">
                       <div className="px-2 py-1.5 text-[11px] text-gray-500 border-b border-gray-800">
-                        Download / load models individually
+                        {v.display} models
                       </div>
                       <div className="max-h-44 overflow-auto">
                         {models.length === 0 && (
@@ -336,7 +328,7 @@ export default function VersionSelector({ activeVersion, onSwitch }: Props) {
                                   </div>
                                 </div>
                                 <div className="flex items-center gap-1">
-                                  {loaded && <span className="text-[11px] text-green-400">ready</span>}
+                                  {loaded && <span className="text-[11px] text-green-400 italic font-medium">Active</span>}
                                   {!loaded && canDownload && !downloading && (
                                     <button
                                       onClick={() => handleLoadModel(v.id, m.name)}

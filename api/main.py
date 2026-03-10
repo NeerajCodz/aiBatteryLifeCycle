@@ -68,20 +68,11 @@ _FRONTEND_DIST = _HERE.parent / "frontend" / "dist"
 # ── Lifespan ─────────────────────────────────────────────────────────────────
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Load only top v3 models on startup; v1/v2 loaded on-demand."""
+    """Start API immediately; bootstrap top v3 models in background."""
     log.info("Loading model registries …")
-    startup_models = select_top_models("v3")
-    if startup_models:
-        registry_v3.load_all(only_models=set(startup_models))
-        log.info(
-            "v3 registry ready — %d models loaded (startup top-%d set: %s)",
-            registry_v3.model_count,
-            DEFAULT_STARTUP_TOP_MODELS,
-            ", ".join(startup_models),
-        )
-    else:
-        registry_v3.load_all()
-        log.warning("Top-5 selection unavailable; loaded full v3 registry")
+    _version_status["v3"] = "downloading"
+    app.state.v3_bootstrap_task = asyncio.create_task(_bg_bootstrap_v3())
+    log.info("v3 bootstrap started in background — API is available immediately")
     # v1 and v2 are NOT loaded at startup — download + load on-demand via
     # POST /api/versions/{v}/load to reduce startup time and memory usage.
     if _version_loaded("v1"):
@@ -89,6 +80,9 @@ async def lifespan(app: FastAPI):
     if _version_loaded("v2"):
         log.info("v2 artifacts present on disk (not loaded — use API to activate)")
     yield
+    t = getattr(app.state, "v3_bootstrap_task", None)
+    if t and not t.done():
+        t.cancel()
     log.info("Shutting down battery-lifecycle API")
 
 
@@ -193,6 +187,45 @@ async def _bg_load_version(version: str) -> None:
     except Exception as exc:
         _version_status[version] = "error"
         log.error("Failed to load version %s: %s", version, exc)
+
+
+async def _bg_bootstrap_v3() -> None:
+    """Download metadata + top startup models, then load them into memory."""
+    import sys as _sys
+
+    try:
+        proc = await asyncio.create_subprocess_exec(
+            _sys.executable,
+            "scripts/download_models.py",
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.STDOUT,
+        )
+        await proc.wait()
+        if proc.returncode != 0:
+            _version_status["v3"] = "error"
+            log.error("Startup model download failed for v3")
+            return
+
+        startup_models = select_top_models("v3")
+        if startup_models:
+            registry_v3.load_all(only_models=set(startup_models))
+            log.info(
+                "v3 registry ready — %d models loaded (startup top-%d set: %s)",
+                registry_v3.model_count,
+                DEFAULT_STARTUP_TOP_MODELS,
+                ", ".join(startup_models),
+            )
+        else:
+            registry_v3.load_all()
+            log.warning("Top model selection unavailable; loaded full v3 registry")
+
+        _version_status["v3"] = "ready"
+    except asyncio.CancelledError:
+        log.info("v3 bootstrap task cancelled")
+        raise
+    except Exception as exc:
+        _version_status["v3"] = "error"
+        log.error("Failed during v3 bootstrap: %s", exc)
 
 
 async def _bg_load_model(version: str, model_name: str) -> None:

@@ -25,6 +25,7 @@ class PredictRequest(BaseModel):
     Re: float = Field(default=0.045, description="Electrolyte resistance (Ω) — training range 0.027–0.156")
     Rct: float = Field(default=0.069, description="Charge transfer resistance (Ω) — training range 0.04–0.27")
     delta_capacity: float = Field(default=-0.005, description="Capacity change from last cycle (Ah)")
+    model_name: Optional[str] = Field(default=None, description="Optional model key override")
 
 
 class PredictResponse(BaseModel):
@@ -61,6 +62,7 @@ class RecommendationRequest(BaseModel):
     current_soh: float = Field(..., ge=0, le=100)
     ambient_temperature: float = Field(default=24.0)
     top_k: int = Field(default=5, ge=1, le=20)
+    model_name: Optional[str] = Field(default=None, description="Optional model key override")
 
 
 class SingleRecommendation(BaseModel):

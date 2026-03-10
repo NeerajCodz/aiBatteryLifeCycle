@@ -32,7 +32,7 @@ async def predict_v2(req: PredictRequest):
     # v2 FIX: no avg_temp auto-correction — trust the user's input
 
     try:
-        result = registry_v2.predict(features)
+        result = registry_v2.predict(features, req.model_name)
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc))
 
@@ -115,7 +115,7 @@ async def recommend_v2(req: RecommendationRequest):
         feat = {**base_features, "ambient_temperature": t, "avg_current": c,
                 "min_voltage": v, "voltage_range": 4.19 - v,
                 "avg_temp": t + 8.0}
-        result = registry_v2.predict(feat)
+        result = registry_v2.predict(feat, req.model_name)
         rul = result.get("rul_cycles", 0) or 0
         candidates.append((rul, t, c, v, result["soh_pct"]))
 

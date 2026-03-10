@@ -59,5 +59,5 @@ EXPOSE 7860
 HEALTHCHECK --interval=30s --timeout=10s --retries=3 \
     CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:7860/health')"
 
-# Entrypoint: download models from HF Hub if absent, then start the server
-CMD ["sh", "-c", "python scripts/download_models.py && uvicorn api.main:app --host 0.0.0.0 --port 7860 --workers 1"]
+# Entrypoint: start API immediately; model bootstrap runs in FastAPI lifespan
+CMD ["uvicorn", "api.main:app", "--host", "0.0.0.0", "--port", "7860", "--workers", "1"]

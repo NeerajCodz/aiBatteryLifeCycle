@@ -29,7 +29,13 @@ import {
   TableProperties, ScrollText, CheckCircle2, WifiOff,
   Server, FlaskConical, Copy, Download,
 } from "lucide-react";
-import { simulateBatteries, BatterySimConfig, BatterySimResult } from "../api";
+import {
+  simulateBatteries,
+  BatterySimConfig,
+  BatterySimResult,
+  fetchVersionModels,
+  VersionModelInfo,
+} from "../api";
 import { useToast } from "./Toast";
 
 // ── Constants ─────────────────────────────────────────────────────────────
@@ -620,6 +626,7 @@ export default function SimulationPanel() {
   const [isSimulating, setIsSimulating]   = useState(false);
   const [modelUsed, setModelUsed]         = useState<string | null>(null);
   const [selectedModel, setSelectedModel] = useState<string>("best_ensemble");
+  const [loadedModels, setLoadedModels]   = useState<VersionModelInfo[]>([]);
 
   // --- Playback ---
   const [playIndex, setPlayIndex]   = useState(0);
@@ -636,6 +643,26 @@ export default function SimulationPanel() {
   const [simLog, setSimLog]             = useState<{ t: string; msg: string; type: "info" | "warn" | "ok" | "err" }[]>([]);
 
   const totalSteps = results.length > 0 ? results[0].soh_history.length : 0;
+
+  useEffect(() => {
+    const refreshLoadedModels = () => {
+      fetchVersionModels("v3")
+        .then((rows) => {
+          const loaded = rows
+            .filter((m) => m.loaded)
+            .sort((a, b) => (b.r2 ?? -1) - (a.r2 ?? -1));
+          setLoadedModels(loaded);
+          if (loaded.length > 0 && !loaded.some((m) => m.name === selectedModel)) {
+            setSelectedModel(loaded[0].name);
+          }
+        })
+        .catch(() => setLoadedModels([]));
+    };
+
+    refreshLoadedModels();
+    const id = setInterval(refreshLoadedModels, 3000);
+    return () => clearInterval(id);
+  }, []);
 
   // current per-battery snapshot at playIndex
   const currentSohs = useMemo(() =>
@@ -1032,15 +1059,15 @@ export default function SimulationPanel() {
               onChange={(e) => setSelectedModel(e.target.value)}
               className="bg-gray-800 border border-gray-700 rounded-lg px-3 py-1.5 text-sm text-white focus:outline-none focus:ring-1 focus:ring-green-500"
             >
-              <option value="best_ensemble">Best Ensemble (RF+ET+LGB)</option>
-              <option value="random_forest">Random Forest</option>
-              <option value="extra_trees">Extra Trees</option>
-              <option value="lightgbm">LightGBM</option>
-              <option value="ridge">Ridge Regression</option>
-              <option value="svr">SVR</option>
-              <option value="batterygpt">BatteryGPT</option>
-              <option value="tft">TFT</option>
-              <option value="vae_lstm">VAE-LSTM</option>
+              {loadedModels.length === 0 && (
+                <option value={selectedModel}>No loaded models</option>
+              )}
+              {loadedModels.map((m) => (
+                <option key={m.name} value={m.name}>
+                  {m.display_name}
+                  {m.r2 != null ? ` (R²=${m.r2.toFixed(3)})` : ""}
+                </option>
+              ))}
             </select>
           </div>
 

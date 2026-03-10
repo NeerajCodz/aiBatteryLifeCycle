@@ -79,7 +79,7 @@ export default function App() {
       {/* Content */}
       <main className="max-w-7xl mx-auto px-4 py-6">
         {activeTab === "simulation" && <SimulationPanel />}
-        {activeTab === "predict" && <PredictionForm />}
+        {activeTab === "predict" && <PredictionForm apiVersion={apiVersion} />}
         {activeTab === "graphs" && <GraphPanel />}
         {activeTab === "recommend" && <RecommendationPanel apiVersion={apiVersion} />}
         {activeTab === "metrics" && <MetricsPanel />}

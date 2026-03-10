@@ -28,7 +28,11 @@ const familyColour = (family: string) => {
   }
 };
 
-export default function PredictionForm() {
+type Props = {
+  apiVersion: "v1" | "v2" | "v3";
+};
+
+export default function PredictionForm({ apiVersion }: Props) {
   const [form, setForm] = useState<PredictRequest>(DEFAULTS);
   const [models, setModels] = useState<ModelInfo[]>([]);
   const [result, setResult] = useState<PredictResponse | null>(null);
@@ -39,15 +43,22 @@ export default function PredictionForm() {
   useEffect(() => {
     fetchModels()
       .then((ms) => {
-        // Prefer loaded models; sort by r2 desc
-        const sorted = [...ms].sort((a, b) => {
-          if (a.loaded !== b.loaded) return a.loaded ? -1 : 1;
+        // Loaded-only list for stable UX
+        const sorted = [...ms]
+          .filter((m) => m.loaded)
+          .sort((a, b) => {
           return (b.r2 ?? 0) - (a.r2 ?? 0);
-        });
+          });
         setModels(sorted);
+        if (sorted.length > 0) {
+          setForm((prev) => {
+            const keep = prev.model_name && sorted.some((m) => m.name === prev.model_name);
+            return { ...prev, model_name: keep ? prev.model_name : null };
+          });
+        }
       })
       .catch(() => {/* silently ignore — model list is optional */});
-  }, []);
+  }, [apiVersion]);
 
   const handleChange = (key: keyof PredictRequest, val: string) => {
     setForm((prev) => ({
@@ -136,10 +147,9 @@ export default function PredictionForm() {
           >
             <option value="">— Registry Default —</option>
             {models.map((m) => (
-              <option key={m.name} value={m.name} disabled={!m.loaded}>
+              <option key={m.name} value={m.name}>
                 {m.display_name ?? m.name}
                 {m.r2 != null ? ` (R²=${m.r2.toFixed(3)})` : ""}
-                {!m.loaded ? " [unavailable]" : ""}
               </option>
             ))}
           </select>

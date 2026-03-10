@@ -33,7 +33,7 @@ async def predict(req: PredictRequest):
         features["avg_temp"] = features["ambient_temperature"] + 8.0
 
     try:
-        result = registry.predict(features)
+        result = registry.predict(features, req.model_name)
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc))
 
@@ -225,7 +225,7 @@ async def predict_v1(req: PredictRequest):
     if abs(features["avg_temp"] - features["ambient_temperature"]) < 0.5:
         features["avg_temp"] = features["ambient_temperature"] + 8.0
     try:
-        result = registry_v1.predict(features)
+        result = registry_v1.predict(features, req.model_name)
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc))
     return PredictResponse(
