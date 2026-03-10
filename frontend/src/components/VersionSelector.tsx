@@ -13,7 +13,14 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import {
   ChevronRight, Download, Check, RefreshCw, AlertCircle, Layers, HardDrive,
 } from "lucide-react";
-import { fetchVersions, loadVersion, VersionInfo } from "../api";
+import {
+  fetchVersions,
+  loadVersion,
+  VersionInfo,
+  fetchVersionModels,
+  loadVersionModel,
+  VersionModelInfo,
+} from "../api";
 
 interface Props {
   activeVersion: "v1" | "v2" | "v3";
@@ -24,6 +31,9 @@ export default function VersionSelector({ activeVersion, onSwitch }: Props) {
   const [open, setOpen] = useState(false);
   const [versions, setVersions] = useState<VersionInfo[]>([]);
   const [busy, setBusy] = useState<string | null>(null);
+  const [modelBusy, setModelBusy] = useState<string | null>(null);
+  const [expandedVersion, setExpandedVersion] = useState<string | null>(null);
+  const [versionModels, setVersionModels] = useState<Record<string, VersionModelInfo[]>>({});
   const menuRef = useRef<HTMLDivElement>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -40,18 +50,33 @@ export default function VersionSelector({ activeVersion, onSwitch }: Props) {
   // Poll while a download is in progress
   useEffect(() => {
     const hasDownloading = versions.some((v) => v.status === "downloading");
+    const hasModelDownloading = Object.values(versionModels)
+      .some((rows) => rows.some((m) => m.status === "downloading"));
     if (hasDownloading && !pollRef.current) {
       pollRef.current = setInterval(refresh, 2500);
     }
-    if (!hasDownloading && pollRef.current) {
+    if (hasModelDownloading && !pollRef.current) {
+      pollRef.current = setInterval(refresh, 2500);
+    }
+    if (!hasDownloading && !hasModelDownloading && pollRef.current) {
       clearInterval(pollRef.current);
       pollRef.current = null;
       setBusy(null);
+      setModelBusy(null);
     }
     return () => {
       if (pollRef.current) clearInterval(pollRef.current);
     };
-  }, [versions, refresh]);
+  }, [versions, versionModels, refresh]);
+
+  useEffect(() => {
+    if (!expandedVersion) return;
+    fetchVersionModels(expandedVersion)
+      .then((rows) => {
+        setVersionModels((prev) => ({ ...prev, [expandedVersion]: rows }));
+      })
+      .catch(() => {});
+  }, [expandedVersion, versions]);
 
   // Close on outside click
   useEffect(() => {
@@ -84,6 +109,33 @@ export default function VersionSelector({ activeVersion, onSwitch }: Props) {
   const handleSwitch = (version: string) => {
     onSwitch(version as "v1" | "v2" | "v3");
     setOpen(false);
+  };
+
+  const handleExpandVersion = async (version: string) => {
+    if (expandedVersion === version) {
+      setExpandedVersion(null);
+      return;
+    }
+    setExpandedVersion(version);
+    try {
+      const rows = await fetchVersionModels(version);
+      setVersionModels((prev) => ({ ...prev, [version]: rows }));
+    } catch {
+      // ignore
+    }
+  };
+
+  const handleLoadModel = async (version: string, model: string) => {
+    const key = `${version}:${model}`;
+    setModelBusy(key);
+    try {
+      await loadVersionModel(version, model);
+      const rows = await fetchVersionModels(version);
+      setVersionModels((prev) => ({ ...prev, [version]: rows }));
+      refresh();
+    } catch {
+      // ignore
+    }
   };
 
   // Auto-switch when download completes
@@ -156,98 +208,153 @@ export default function VersionSelector({ activeVersion, onSwitch }: Props) {
             const isLoaded = v.loaded && v.model_count > 0;
             const isOnDisk = v.status === "on_disk" || (v.on_disk && !isLoaded && !isDownloading && !isError);
             const isNotDownloaded = v.status === "not_downloaded" && !v.on_disk;
+            const isExpanded = expandedVersion === v.id;
+            const models = versionModels[v.id] ?? [];
 
             return (
-              <div
-                key={v.id}
-                className="flex items-center justify-between px-3 py-2.5
-                  hover:bg-gray-800/60 transition-colors"
-              >
-                <div className="flex-1 min-w-0">
-                  <span className="text-sm font-medium text-gray-200">{v.display}</span>
-                  {v.features && (
-                    <span className="ml-2 text-xs text-gray-500">
-                      {v.features}f
-                    </span>
-                  )}
-                  {isLoaded && (
-                    <span className="ml-2 text-xs text-gray-500">
-                      {v.model_count} models
-                    </span>
-                  )}
-                  {isOnDisk && (
-                    <span className="ml-2 text-xs text-yellow-400">on disk</span>
-                  )}
-                  {isError && (
-                    <span className="ml-2 text-xs text-red-400">error</span>
-                  )}
-                  {isDownloading && (
-                    <span className="ml-2 text-xs text-yellow-400 animate-pulse">
-                      downloading...
-                    </span>
-                  )}
-                  {isNotDownloaded && (
-                    <span className="ml-2 text-xs text-gray-600">not downloaded</span>
-                  )}
+              <div key={v.id} className="border-t border-gray-800/80 first:border-t-0">
+                <div
+                  className="flex items-center justify-between px-3 py-2.5
+                    hover:bg-gray-800/60 transition-colors"
+                >
+                  <div className="flex-1 min-w-0">
+                    <span className="text-sm font-medium text-gray-200">{v.display}</span>
+                    {v.features && (
+                      <span className="ml-2 text-xs text-gray-500">
+                        {v.features}f
+                      </span>
+                    )}
+                    {isLoaded && (
+                      <span className="ml-2 text-xs text-gray-500">
+                        {v.model_count} models
+                      </span>
+                    )}
+                    {isOnDisk && (
+                      <span className="ml-2 text-xs text-yellow-400">on disk</span>
+                    )}
+                    {isError && (
+                      <span className="ml-2 text-xs text-red-400">error</span>
+                    )}
+                    {isDownloading && (
+                      <span className="ml-2 text-xs text-yellow-400 animate-pulse">
+                        downloading...
+                      </span>
+                    )}
+                    {isNotDownloaded && (
+                      <span className="ml-2 text-xs text-gray-600">not downloaded</span>
+                    )}
+                  </div>
+
+                  <div className="flex items-center gap-1 shrink-0 ml-2">
+                    {isLoaded && (
+                      <button
+                        onClick={() => handleSwitch(v.id)}
+                        className="px-2.5 py-1 rounded text-xs font-medium
+                          bg-green-700 hover:bg-green-600 text-white transition-colors"
+                        title={`Switch to ${v.display}`}
+                      >
+                        Switch
+                      </button>
+                    )}
+
+                    {isOnDisk && !isDownloading && (
+                      <button
+                        onClick={() => handleDownloadOrLoad(v.id)}
+                        className="flex items-center gap-1 px-2.5 py-1 rounded text-xs font-medium
+                          bg-blue-700 hover:bg-blue-600 text-white transition-colors"
+                        title={`Load ${v.display} into memory`}
+                      >
+                        <HardDrive className="w-3 h-3" />
+                        Load
+                      </button>
+                    )}
+
+                    {isNotDownloaded && !isDownloading && !isError && (
+                      <button
+                        onClick={() => handleDownloadOrLoad(v.id)}
+                        className="flex items-center gap-1 px-2.5 py-1 rounded text-xs font-medium
+                          bg-gray-700 hover:bg-gray-600 text-gray-300 hover:text-white transition-colors"
+                        title={`Download ${v.display} from HF Hub`}
+                      >
+                        <Download className="w-3 h-3" />
+                        Download
+                      </button>
+                    )}
+
+                    {isDownloading && (
+                      <RefreshCw className="w-3.5 h-3.5 text-yellow-400 animate-spin" />
+                    )}
+
+                    {isError && !isDownloading && (
+                      <button
+                        onClick={() => handleDownloadOrLoad(v.id)}
+                        className="flex items-center gap-1 px-2.5 py-1 rounded text-xs font-medium
+                          bg-gray-700 hover:bg-red-700 text-red-400 hover:text-white transition-colors"
+                        title="Retry download"
+                      >
+                        <AlertCircle className="w-3 h-3" />
+                        Retry
+                      </button>
+                    )}
+
+                    <button
+                      onClick={() => handleExpandVersion(v.id)}
+                      className="px-2 py-1 rounded text-xs font-medium bg-gray-800 hover:bg-gray-700 text-gray-300 transition-colors"
+                      title="Show model-level controls"
+                    >
+                      {isExpanded ? "Hide Models" : "Models"}
+                    </button>
+                  </div>
                 </div>
 
-                <div className="flex items-center gap-1 shrink-0 ml-2">
-                  {/* Switch button — loaded and ready */}
-                  {isLoaded && (
-                    <button
-                      onClick={() => handleSwitch(v.id)}
-                      className="px-2.5 py-1 rounded text-xs font-medium
-                        bg-green-700 hover:bg-green-600 text-white transition-colors"
-                      title={`Switch to ${v.display}`}
-                    >
-                      Switch
-                    </button>
-                  )}
-
-                  {/* Load button — on disk but not loaded in memory */}
-                  {isOnDisk && !isDownloading && (
-                    <button
-                      onClick={() => handleDownloadOrLoad(v.id)}
-                      className="flex items-center gap-1 px-2.5 py-1 rounded text-xs font-medium
-                        bg-blue-700 hover:bg-blue-600 text-white transition-colors"
-                      title={`Load ${v.display} into memory`}
-                    >
-                      <HardDrive className="w-3 h-3" />
-                      Load
-                    </button>
-                  )}
-
-                  {/* Download button — not on disk */}
-                  {isNotDownloaded && !isDownloading && !isError && (
-                    <button
-                      onClick={() => handleDownloadOrLoad(v.id)}
-                      className="flex items-center gap-1 px-2.5 py-1 rounded text-xs font-medium
-                        bg-gray-700 hover:bg-gray-600 text-gray-300 hover:text-white transition-colors"
-                      title={`Download ${v.display} from HF Hub`}
-                    >
-                      <Download className="w-3 h-3" />
-                      Download
-                    </button>
-                  )}
-
-                  {/* Spinner while downloading */}
-                  {isDownloading && (
-                    <RefreshCw className="w-3.5 h-3.5 text-yellow-400 animate-spin" />
-                  )}
-
-                  {/* Error retry */}
-                  {isError && !isDownloading && (
-                    <button
-                      onClick={() => handleDownloadOrLoad(v.id)}
-                      className="flex items-center gap-1 px-2.5 py-1 rounded text-xs font-medium
-                        bg-gray-700 hover:bg-red-700 text-red-400 hover:text-white transition-colors"
-                      title="Retry download"
-                    >
-                      <AlertCircle className="w-3 h-3" />
-                      Retry
-                    </button>
-                  )}
-                </div>
+                {isExpanded && (
+                  <div className="px-3 pb-3">
+                    <div className="rounded-lg border border-gray-800 bg-gray-950/50 overflow-hidden">
+                      <div className="px-2 py-1.5 text-[11px] text-gray-500 border-b border-gray-800">
+                        Download / load models individually
+                      </div>
+                      <div className="max-h-44 overflow-auto">
+                        {models.length === 0 && (
+                          <div className="px-2 py-2 text-xs text-gray-600">No model metadata available</div>
+                        )}
+                        {[...models]
+                          .sort((a, b) => (b.r2 ?? -1) - (a.r2 ?? -1))
+                          .map((m) => {
+                            const key = `${v.id}:${m.name}`;
+                            const downloading = m.status === "downloading" || modelBusy === key;
+                            const loaded = m.loaded;
+                            const onDisk = m.on_disk;
+                            const canDownload = m.has_file;
+                            return (
+                              <div key={m.name} className="flex items-center justify-between px-2 py-1.5 border-b border-gray-900 last:border-b-0">
+                                <div className="min-w-0 pr-2">
+                                  <div className="text-xs text-gray-200 truncate">{m.display_name}</div>
+                                  <div className="text-[11px] text-gray-500 truncate">
+                                    {m.family}
+                                    {m.r2 != null ? ` • R2 ${m.r2.toFixed(3)}` : ""}
+                                    {loaded ? " • loaded" : onDisk ? " • on disk" : ""}
+                                  </div>
+                                </div>
+                                <div className="flex items-center gap-1">
+                                  {loaded && <span className="text-[11px] text-green-400">ready</span>}
+                                  {!loaded && canDownload && !downloading && (
+                                    <button
+                                      onClick={() => handleLoadModel(v.id, m.name)}
+                                      className="px-2 py-0.5 rounded text-[11px] font-medium bg-blue-700 hover:bg-blue-600 text-white"
+                                    >
+                                      {onDisk ? "Load" : "Download"}
+                                    </button>
+                                  )}
+                                  {downloading && <RefreshCw className="w-3 h-3 text-yellow-400 animate-spin" />}
+                                  {!canDownload && <span className="text-[11px] text-gray-500">virtual</span>}
+                                </div>
+                              </div>
+                            );
+                          })}
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
             );
           })}

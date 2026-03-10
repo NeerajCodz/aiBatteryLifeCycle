@@ -185,22 +185,49 @@ class ModelRegistry:
             cinfo = self._catalog.get(cname, {})
             self._ensemble_weights[cname] = cinfo.get("r2", 1.0)
 
+    def model_on_disk(self, model_name: str) -> bool:
+        """Return True when the model artifact file exists on disk.
+
+        Virtual models (e.g., best_ensemble) have no direct file and therefore
+        return False.
+        """
+        info = self._catalog.get(model_name, {})
+        rel = info.get("file")
+        if not rel:
+            return False
+        return (self._artifacts / rel).exists()
+
+    def load_model(self, model_name: str) -> bool:
+        """Load one model (and ensemble dependencies when applicable).
+
+        Returns True if the target model is available in memory after loading.
+        """
+        if model_name in self.models:
+            return True
+
+        targets: set[str] = {model_name}
+        if model_name == "best_ensemble":
+            targets.update(self._ensemble_components)
+
+        self.load_all(only_models=targets)
+        return model_name in self.models
+
     # ── Loading ──────────────────────────────────────────────────────────
-    def load_all(self) -> None:
+    def load_all(self, only_models: set[str] | None = None) -> None:
         """Scan artifacts/models and load all available model artefacts.
 
         Safe to call multiple times — subsequent calls are no-ops when the
         registry is already populated.
         """
-        if self.models:
+        if only_models is None and self.models:
             log.debug("Registry already populated — skipping load_all()")
             return
         self._detect_device()
         self._load_scaler()
         self.feature_cols = self._load_feature_cols()
-        self._load_classical()
-        self._load_deep_pytorch()
-        self._load_deep_keras()
+        self._load_classical(only_models=only_models)
+        self._load_deep_pytorch(only_models=only_models)
+        self._load_deep_keras(only_models=only_models)
         self._register_ensemble()
         self._choose_default()
         log.info(
@@ -217,7 +244,7 @@ class ModelRegistry:
         except ImportError:
             log.info("torch not installed — deep PyTorch models unavailable")
 
-    def _load_classical(self) -> None:
+    def _load_classical(self, only_models: set[str] | None = None) -> None:
         """Eagerly load all sklearn/XGBoost/LightGBM joblib artefacts."""
         cdir = self._models_dir / "classical"
         if not cdir.exists():
@@ -225,6 +252,10 @@ class ModelRegistry:
             return
         for p in sorted(cdir.glob("*.joblib")):
             name = p.stem
+            if only_models is not None and name not in only_models:
+                continue
+            if name in self.models:
+                continue
             # Skip non-model dumps (param search results, classifiers)
             if (
                 "best_params" in name
@@ -308,7 +339,7 @@ class ModelRegistry:
             log.warning("Cannot build PyTorch model '%s': %s", name, exc)
         return None
 
-    def _load_deep_pytorch(self) -> None:
+    def _load_deep_pytorch(self, only_models: set[str] | None = None) -> None:
         """Load PyTorch .pt state-dict files into reconstructed model instances."""
         ddir = self._models_dir / "deep"
         if not ddir.exists():
@@ -320,6 +351,10 @@ class ModelRegistry:
             return
         for p in sorted(ddir.glob("*.pt")):
             name = p.stem
+            if only_models is not None and name not in only_models:
+                continue
+            if name in self.models:
+                continue
             n_feat = self._detect_n_feat(p)
             model = self._build_pytorch_model(name, n_feat=n_feat)
             if model is None:
@@ -349,11 +384,20 @@ class ModelRegistry:
                     "path": str(p), "load_error": str(exc),
                 }
 
-    def _load_deep_keras(self) -> None:
+    def _load_deep_keras(self, only_models: set[str] | None = None) -> None:
         """Load TensorFlow/Keras .keras model files."""
         ddir = self._models_dir / "deep"
         if not ddir.exists():
             return
+
+        if only_models is not None:
+            requested_keras = any(
+                self._catalog.get(m, {}).get("family") == "deep_keras"
+                for m in only_models
+            )
+            if not requested_keras:
+                return
+
         try:
             import tensorflow as tf
         except ImportError:
@@ -382,6 +426,10 @@ class ModelRegistry:
             _custom_objects = {}
         for p in sorted(ddir.glob("*.keras")):
             name = p.stem
+            if only_models is not None and name not in only_models:
+                continue
+            if name in self.models:
+                continue
             try:
                 model = tf.keras.models.load_model(str(p), custom_objects=_custom_objects, safe_mode=False)
                 self.models[name] = model

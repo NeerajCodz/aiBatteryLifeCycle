@@ -86,6 +86,25 @@ export const fetchVersions = () =>
 export const loadVersion = (version: string) =>
   baseApi.post<{ status: string; version: string }>(`/versions/${version}/load`).then((r) => r.data);
 
+export interface VersionModelInfo {
+  name: string;
+  display_name: string;
+  family: string;
+  r2: number | null;
+  has_file: boolean;
+  on_disk: boolean;
+  loaded: boolean;
+  status: "ready" | "on_disk" | "not_downloaded" | "downloading" | "error";
+}
+
+export const fetchVersionModels = (version: string) =>
+  baseApi.get<VersionModelInfo[]>(`/versions/${version}/models`).then((r) => r.data);
+
+export const loadVersionModel = (version: string, model: string) =>
+  baseApi
+    .post<{ status: string; version: string; model: string }>(`/versions/${version}/models/${model}/load`)
+    .then((r) => r.data);
+
 /** Models metadata JSON for a specific version. */
 export const fetchVersionModelsMeta = (version: string) =>
   baseApi.get<any>(`/versions/${version}/models-meta`).then((r) => r.data);

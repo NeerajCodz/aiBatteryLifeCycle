@@ -53,6 +53,7 @@ from fastapi.responses import FileResponse
 
 from api.model_registry import registry, registry_v1, registry_v2, registry_v3
 from api.schemas import HealthResponse
+from scripts.download_models import select_top_models, DEFAULT_STARTUP_TOP_MODELS
 from src.utils.logger import get_logger
 
 log = get_logger(__name__)
@@ -67,10 +68,20 @@ _FRONTEND_DIST = _HERE.parent / "frontend" / "dist"
 # ── Lifespan ─────────────────────────────────────────────────────────────────
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Load only v3 (latest) models on startup; v1/v2 loaded on-demand."""
+    """Load only top v3 models on startup; v1/v2 loaded on-demand."""
     log.info("Loading model registries …")
-    registry_v3.load_all()
-    log.info("v3 registry ready — %d models loaded", registry_v3.model_count)
+    startup_models = select_top_models("v3")
+    if startup_models:
+        registry_v3.load_all(only_models=set(startup_models))
+        log.info(
+            "v3 registry ready — %d models loaded (startup top-%d set: %s)",
+            registry_v3.model_count,
+            DEFAULT_STARTUP_TOP_MODELS,
+            ", ".join(startup_models),
+        )
+    else:
+        registry_v3.load_all()
+        log.warning("Top-5 selection unavailable; loaded full v3 registry")
     # v1 and v2 are NOT loaded at startup — download + load on-demand via
     # POST /api/versions/{v}/load to reduce startup time and memory usage.
     if _version_loaded("v1"):
@@ -118,6 +129,7 @@ async def health():
 # ── Version management ───────────────────────────────────────────────────────
 _REGISTRIES = {"v1": registry_v1, "v2": registry_v2, "v3": registry_v3}
 _version_status: dict[str, str] = {}   # "downloading" | "ready" | "error"
+_model_status: dict[str, str] = {}     # "vX:model" -> status
 
 
 def _artifacts_dir() -> Path:
@@ -125,8 +137,14 @@ def _artifacts_dir() -> Path:
 
 
 def _version_loaded(version: str) -> bool:
-    base = _artifacts_dir() / version / "models" / "classical"
-    return any(base.glob("*.joblib")) if base.exists() else False
+    base = _artifacts_dir() / version / "models"
+    if not base.exists():
+        return False
+    return any(base.rglob("*.joblib")) or any(base.rglob("*.pt")) or any(base.rglob("*.keras"))
+
+
+def _model_status_key(version: str, model_name: str) -> str:
+    return f"{version}:{model_name}"
 
 
 @app.get("/api/versions", tags=["meta"])
@@ -157,7 +175,7 @@ async def list_versions():
 
 
 async def _bg_load_version(version: str) -> None:
-    import subprocess, sys as _sys
+    import sys as _sys
     try:
         proc = await asyncio.create_subprocess_exec(
             _sys.executable, "scripts/download_models.py", "--version", version,
@@ -175,6 +193,33 @@ async def _bg_load_version(version: str) -> None:
     except Exception as exc:
         _version_status[version] = "error"
         log.error("Failed to load version %s: %s", version, exc)
+
+
+async def _bg_load_model(version: str, model_name: str) -> None:
+    import sys as _sys
+
+    key = _model_status_key(version, model_name)
+    try:
+        proc = await asyncio.create_subprocess_exec(
+            _sys.executable,
+            "scripts/download_models.py",
+            "--version",
+            version,
+            "--model",
+            model_name,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.STDOUT,
+        )
+        await proc.wait()
+        if proc.returncode == 0 and _REGISTRIES[version].load_model(model_name):
+            _model_status[key] = "ready"
+            log.info("Model %s/%s loaded on demand", version, model_name)
+        else:
+            _model_status[key] = "error"
+            log.error("Failed to download/load model %s/%s", version, model_name)
+    except Exception as exc:
+        _model_status[key] = "error"
+        log.error("Failed to load model %s/%s: %s", version, model_name, exc)
 
 
 @app.post("/api/versions/{version}/load", tags=["meta"])
@@ -208,6 +253,65 @@ async def get_version_models_meta(version: str):
     if not meta_path.exists():
         raise HTTPException(status_code=404, detail=f"models.json not found for {version}")
     return _json.loads(meta_path.read_text(encoding="utf-8"))
+
+
+@app.get("/api/versions/{version}/models", tags=["meta"])
+async def list_version_models(version: str):
+    """List all models in models.json with disk/memory/load status."""
+    if version not in _REGISTRIES:
+        raise HTTPException(status_code=400, detail=f"Unknown version '{version}'")
+
+    reg = _REGISTRIES[version]
+    rows = []
+    for model_name, info in reg._catalog.items():
+        key = _model_status_key(version, model_name)
+        status = _model_status.get(key)
+        loaded = model_name in reg.models
+        if status is None:
+            status = "ready" if loaded else ("on_disk" if reg.model_on_disk(model_name) else "not_downloaded")
+        rows.append({
+            "name": model_name,
+            "display_name": info.get("display_name", model_name),
+            "family": info.get("family", "unknown"),
+            "r2": info.get("r2"),
+            "has_file": bool(info.get("file")),
+            "on_disk": reg.model_on_disk(model_name),
+            "loaded": loaded,
+            "status": status,
+        })
+    return rows
+
+
+@app.post("/api/versions/{version}/models/{model_name}/load", tags=["meta"])
+async def load_single_model(version: str, model_name: str, background_tasks: BackgroundTasks):
+    """Download + activate one model without loading an entire version."""
+    if version not in _REGISTRIES:
+        raise HTTPException(status_code=400, detail=f"Unknown version '{version}'")
+
+    reg = _REGISTRIES[version]
+    if model_name not in reg._catalog:
+        raise HTTPException(status_code=404, detail=f"Unknown model '{model_name}' in {version}")
+
+    # Virtual models have no direct downloadable artifact.
+    if not reg._catalog.get(model_name, {}).get("file"):
+        if reg.load_model(model_name):
+            return {"status": "ready", "version": version, "model": model_name}
+        raise HTTPException(status_code=400, detail=f"Model '{model_name}' cannot be loaded directly")
+
+    key = _model_status_key(version, model_name)
+    if _model_status.get(key) == "downloading":
+        return {"status": "downloading", "version": version, "model": model_name}
+
+    if reg.model_on_disk(model_name):
+        if reg.load_model(model_name):
+            _model_status[key] = "ready"
+            return {"status": "ready", "version": version, "model": model_name}
+        _model_status[key] = "error"
+        raise HTTPException(status_code=500, detail=f"Model '{model_name}' exists on disk but failed to load")
+
+    _model_status[key] = "downloading"
+    background_tasks.add_task(_bg_load_model, version, model_name)
+    return {"status": "downloading", "version": version, "model": model_name}
 
 
 # ── Include routers ──────────────────────────────────────────────────────────
