@@ -36,15 +36,20 @@
 
 ## Model Registry
 
-The `ModelRegistry` singleton:
-- Scans `artifacts/models/classical/` for `.joblib` files (sklearn/xgb/lgbm)
-- Scans `artifacts/models/deep/` for `.pt` (PyTorch) and `.keras` (TF) files
-- Loads classical models eagerly; deep models registered lazily
-- Selects default model by priority: XGBoost > LightGBM > RandomForest > Ridge > deep models
+The `ModelRegistry` class is instantiated per version (v1, v2, v3):
+- **Dynamic catalog:** Reads `artifacts/{version}/models.json` at construction time — no hardcoded model catalog.
+  The JSON file is the single source of truth for model names, display names, families, R² scores,
+  feature columns, scaler paths, ensemble components, and champion model.
+- **Feature columns:** Loaded from the `feature_set` array in models.json (v1/v2: 12 features, v3: 18 features).
+- **Scaler routing:** Per-model `requires_scaling` flag in models.json determines whether the StandardScaler
+  is applied at inference time (e.g. Ridge, SVR, KNN) or raw features are passed (tree models).
+- **Ensemble weights:** Computed as R²-proportional from component model catalog entries, dynamically.
+- Scans `artifacts/{version}/models/classical/` for `.joblib` files (sklearn/xgb/lgbm)
+- Scans `artifacts/{version}/models/deep/` for `.pt` (PyTorch) and `.keras` (TF) files
+- Only v3 models are loaded at startup; v1/v2 are loaded on-demand via `POST /api/versions/{v}/load`
 - Provides unified `predict()` interface regardless of framework
-- `predict_array(X: np.ndarray, model_name: str)` batch method enables vectorized simulation: accepts an (N, n_features) array and returns predictions for all N cycles in one call, avoiding Python loops
+- `predict_array(X: np.ndarray, model_name: str)` batch method enables vectorized simulation
 - `_x_for_model()` normalizes input feature extraction for both single-cycle and batch paths
-- `_load_scaler()` lazily loads per-model scalers from `artifacts/scalers/`
 
 ## Frontend Architecture
 

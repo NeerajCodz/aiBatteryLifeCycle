@@ -55,7 +55,7 @@ Columns: `Sense_current` (Re + Im), `Battery_current` (Re + Im), `Current_ratio`
 
 ### Feature Engineering
 
-#### Per-Cycle Scalar Features (12 dimensions)
+#### Per-Cycle Scalar Features (12 dimensions — v1/v2/v3)
 1. `cycle_number` — sequential cycle index
 2. `ambient_temperature` — environment temperature
 3. `peak_voltage` — max voltage in cycle
@@ -68,6 +68,16 @@ Columns: `Sense_current` (Re + Im), `Battery_current` (Re + Im), `Current_ratio`
 10. `Re` — electrolyte resistance
 11. `Rct` — charge transfer resistance
 12. `delta_capacity` — capacity change from previous cycle
+
+#### Engineered Features (6 additional — v3 only)
+13. `capacity_retention` — $C_n / C_0$, normalized capacity relative to initial
+14. `cumulative_energy` — $\sum E_i$, cumulative energy throughput
+15. `dRe_dn` — electrolyte resistance derivative (rate of change per cycle)
+16. `dRct_dn` — charge transfer resistance derivative
+17. `soh_rolling_mean` — rolling 5-cycle mean of SOH
+18. `voltage_slope` — voltage recovery slope (charge/discharge transition)
+
+v3's 18-feature set captures both instantaneous measurements (features 1–12) and degradation dynamics (features 13–18), enabling physics-informed prediction.
 
 #### Derived Targets
 - **SOC:** Coulomb counting (integrated current)

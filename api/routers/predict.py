@@ -237,7 +237,7 @@ async def predict_v1(req: PredictRequest):
         confidence_lower=result["confidence_lower"],
         confidence_upper=result["confidence_upper"],
         model_used=result["model_used"],
-        model_version=result.get("model_version", "1.0.0"),
+        model_version=result.get("model_version", "1.0"),
     )
 
 

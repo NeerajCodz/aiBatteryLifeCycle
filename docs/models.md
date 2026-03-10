@@ -2,57 +2,67 @@
 
 ## Overview
 
-The system trains 22 models across two generations, then selects the best via unified evaluation.
-**Champion v1:** Random Forest (R² = 0.957, MAE = 4.78).  
-**Champion v2.6:** BestEnsemble — weighted average of RF + XGB + LGB, calibrated by R² score.
+The system trains 24+ models across three generations, then selects the best via unified evaluation.
+All model metadata, metrics, and configuration are stored in `artifacts/{version}/models.json` and
+loaded dynamically by the registry — there is no hardcoded model catalog.
+
+**Champion v1:** Random Forest (R² = 0.957, MAE = 4.78) — cross-battery group split, 12 features.
+**Champion v2:** ExtraTrees (R² = 0.967, MAE = 1.17) — intra-battery chronological split, 12 features.
+**Champion v3:** XGBoost (R² = 0.987, MAE = 0.92, 99.5% within ±5%) — cross-battery grouped split, 18 features.
 
 ---
 
 ## Model Versioning
 
-Models are organized into two generations (v1 and v2) to support systematic ablation studies and
-deployment reproducibility. Ensemble methods are a patch release within v2.
+Models are organized into three generations. Each version has its own `models.json` that defines
+the available models, their scores, feature set, scalers, and ensemble configuration.
 
-| Generation | Version range | Family | Description |
-|:---:|:---:|---|---|
-| **v1** | v1.0.0 | Classical ML | Ridge, Lasso, ElasticNet, KNN ×3, SVR, RF, XGBoost, LightGBM |
-| **v2** | v2.0–v2.5 | Deep Learning | LSTM ×4, BatteryGPT, TFT, iTransformer ×3, VAE-LSTM |
-| **v2 patch** | v2.6.0 | Ensemble | BestEnsemble (weighted RF + XGB + LGB) |
+| Generation | Version | Family | Features | Split | Champion |
+|:---:|:---:|---|:---:|---|---|
+| **v1** | 1.0 | Classical ML | 12 | Cross-battery group | Random Forest |
+| **v2** | 2.0 | Classical + Deep | 12 | Intra-battery chrono | ExtraTrees |
+| **v3** | 3.0 | Classical + Deep + Ensemble | 18 | Cross-battery grouped | XGBoost |
 
-### BestEnsemble (v2.6.0)
+### BestEnsemble (v3.0)
 
-The weighted-average ensemble combines the three best classical models:
+The weighted-average ensemble combines the top classical models (R²-proportional weights):
 
-$$\hat{y} = \frac{w_{\text{RF}} \cdot \hat{y}_{\text{RF}} + w_{\text{XGB}} \cdot \hat{y}_{\text{XGB}} + w_{\text{LGB}} \cdot \hat{y}_{\text{LGB}}}{w_{\text{RF}} + w_{\text{XGB}} + w_{\text{LGB}}}$$
+$$\hat{y} = \frac{\sum_{i} w_i \cdot \hat{y}_i}{\sum_{i} w_i}$$
 
-| Component | R² | Weight |
-|-----------|:---:|:------:|
-| Random Forest | 0.957 | 0.957 |
-| XGBoost | 0.928 | 0.928 |
-| LightGBM | 0.928 | 0.928 |
-
-The ensemble is registered automatically when all three components are loaded.
-See `POST /api/predict/ensemble` to use it directly.
+Components and weights are defined in `artifacts/v3/models.json` and loaded dynamically.
+v3 ensemble components: RF, XGB, LGB, ExtraTrees, GradientBoosting.
 
 ---
 
-## Results Summary
+## v3 Results Summary (Production)
 
-| Rank | Model | R² | MAE | RMSE | Family |
-|------|-------|----|-----|------|--------|
-| 1 | Random Forest | 0.957 | 4.78 | 6.46 | Classical |
-| 2 | LightGBM | 0.928 | 5.53 | 8.33 | Classical |
-| 3 | Weighted Avg Ensemble | 0.886 | 3.89 | 6.47 | Ensemble |
-| 4 | TFT | 0.881 | 3.93 | 6.62 | Transformer |
-| 5 | Stacking Ensemble | 0.863 | 4.91 | 7.10 | Ensemble |
-| 6 | XGBoost | 0.847 | 8.06 | 12.14 | Classical |
-| 7 | SVR | 0.805 | 7.56 | 13.71 | Classical |
-| 8 | VAE-LSTM | 0.730 | 7.82 | 9.98 | Generative |
-| 9 | KNN-10 | 0.724 | 11.67 | 16.30 | Classical |
-| 10 | DG-iTransformer | 0.595 | 9.38 | 12.22 | Graph-Transformer |
-| 11 | iTransformer | 0.551 | 11.10 | 12.87 | Transformer |
-| 12 | BatteryGPT | 0.508 | 10.71 | 13.47 | Transformer |
-| 13 | Vanilla LSTM | 0.507 | 11.44 | 13.48 | LSTM |
+| Rank | Model | R² | MAE | Within ±5% | Family |
+|------|-------|----|-----|------------|--------|
+| 1 | XGBoost | 0.9866 | 0.92 | 99.5% | Classical |
+| 2 | GradientBoosting | 0.9860 | 0.94 | 99.4% | Classical |
+| 3 | LightGBM | 0.9826 | 1.05 | 99.0% | Classical |
+| 4 | Random Forest | 0.9814 | 1.10 | 98.8% | Classical |
+| 5 | Best Ensemble | 0.9810 | 1.02 | 99.2% | Ensemble |
+| 6 | ExtraTrees | 0.9701 | 1.38 | 97.8% | Classical |
+
+## v2 Results Summary
+
+| Rank | Model | R² | MAE | Within ±5% | Family |
+|------|-------|----|-----|------------|--------|
+| 1 | ExtraTrees | 0.9673 | 1.17 | 99.1% | Classical |
+| 2 | LightGBM | 0.9582 | 1.38 | 98.4% | Classical |
+| 3 | SVR | 0.9474 | 1.67 | 95.1% | Classical |
+| 4 | TFT | 0.881 | 3.93 | — | Transformer |
+| 5 | BatteryGPT | 0.881 | 10.71 | — | Transformer |
+
+## v1 Results Summary (Legacy)
+
+| Rank | Model | R² | MAE | Family |
+|------|-------|----|-----|--------|
+| 1 | Random Forest | 0.957 | 4.78 | Classical |
+| 2 | LightGBM | 0.928 | 5.53 | Classical |
+| 3 | XGBoost | 0.847 | 8.06 | Classical |
+| 4 | SVR | 0.805 | 7.56 | Classical |
 
 ---
 

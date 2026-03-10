@@ -45,7 +45,7 @@ async def predict_v2(req: PredictRequest):
         confidence_lower=result["confidence_lower"],
         confidence_upper=result["confidence_upper"],
         model_used=result["model_used"],
-        model_version=result.get("model_version", "2.0.0"),
+        model_version=result.get("model_version", "2.0"),
     )
 
 
@@ -64,7 +64,7 @@ async def predict_batch_v2(req: BatchPredictRequest):
             confidence_lower=r.get("confidence_lower"),
             confidence_upper=r.get("confidence_upper"),
             model_used=r["model_used"],
-            model_version=r.get("model_version", "2.0.0"),
+            model_version=r.get("model_version", "2.0"),
         )
         for r in results
     ]

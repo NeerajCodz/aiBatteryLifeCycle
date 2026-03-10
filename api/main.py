@@ -67,14 +67,16 @@ _FRONTEND_DIST = _HERE.parent / "frontend" / "dist"
 # ── Lifespan ─────────────────────────────────────────────────────────────────
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Load models on startup, clean up on shutdown."""
+    """Load only v3 (latest) models on startup; v1/v2 loaded on-demand."""
     log.info("Loading model registries …")
-    registry_v1.load_all()
-    log.info("v1 registry ready — %d models loaded", registry_v1.model_count)
-    registry_v2.load_all()
-    log.info("v2 registry ready — %d models loaded", registry_v2.model_count)
     registry_v3.load_all()
     log.info("v3 registry ready — %d models loaded", registry_v3.model_count)
+    # v1 and v2 are NOT loaded at startup — download + load on-demand via
+    # POST /api/versions/{v}/load to reduce startup time and memory usage.
+    if _version_loaded("v1"):
+        log.info("v1 artifacts present on disk (not loaded — use API to activate)")
+    if _version_loaded("v2"):
+        log.info("v2 artifacts present on disk (not loaded — use API to activate)")
     yield
     log.info("Shutting down battery-lifecycle API")
 
@@ -129,17 +131,29 @@ def _version_loaded(version: str) -> bool:
 
 @app.get("/api/versions", tags=["meta"])
 async def list_versions():
-    """Return all known versions with loaded / downloading status."""
-    return [
-        {
+    """Return all known versions with loaded / downloading status and metadata."""
+    out = []
+    for v in ["v3", "v2", "v1"]:
+        reg = _REGISTRIES[v]
+        on_disk = _version_loaded(v)
+        in_memory = reg.model_count > 0
+        meta = reg._version_meta  # from models.json (loaded in __init__)
+        out.append({
             "id": v,
-            "display": f"Version {v[1]}",
-            "loaded": _version_loaded(v),
-            "model_count": _REGISTRIES[v].model_count,
-            "status": _version_status.get(v, "ready" if _version_loaded(v) else "not_downloaded"),
-        }
-        for v in ["v3", "v2", "v1"]
-    ]
+            "display": meta.get("display", v),
+            "description": meta.get("description", ""),
+            "features": meta.get("features"),
+            "champion": meta.get("champion"),
+            "on_disk": on_disk,
+            "loaded": on_disk and in_memory,
+            "model_count": reg.model_count,
+            "catalog_count": len(reg._catalog),
+            "status": _version_status.get(
+                v,
+                "ready" if in_memory else ("on_disk" if on_disk else "not_downloaded"),
+            ),
+        })
+    return out
 
 
 async def _bg_load_version(version: str) -> None:
@@ -170,9 +184,30 @@ async def load_version(version: str, background_tasks: BackgroundTasks):
         raise HTTPException(status_code=400, detail=f"Unknown version '{version}'")
     if _version_status.get(version) == "downloading":
         return {"status": "downloading", "version": version}
+    # If artifacts exist on disk but not loaded, just load without downloading
+    if _version_loaded(version) and _REGISTRIES[version].model_count == 0:
+        _REGISTRIES[version].load_all()
+        _version_status[version] = "ready"
+        log.info("Version %s loaded from disk — %d models", version, _REGISTRIES[version].model_count)
+        return {"status": "ready", "version": version}
     _version_status[version] = "downloading"
     background_tasks.add_task(_bg_load_version, version)
     return {"status": "downloading", "version": version}
+
+
+# ── Models metadata endpoint ──────────────────────────────────────────────────
+import json as _json
+
+
+@app.get("/api/versions/{version}/models-meta", tags=["meta"])
+async def get_version_models_meta(version: str):
+    """Return models.json metadata for a specific version."""
+    if version not in _REGISTRIES:
+        raise HTTPException(status_code=400, detail=f"Unknown version '{version}'")
+    meta_path = _artifacts_dir() / version / "models.json"
+    if not meta_path.exists():
+        raise HTTPException(status_code=404, detail=f"models.json not found for {version}")
+    return _json.loads(meta_path.read_text(encoding="utf-8"))
 
 
 # ── Include routers ──────────────────────────────────────────────────────────

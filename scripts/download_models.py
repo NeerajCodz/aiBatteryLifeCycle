@@ -126,12 +126,12 @@ def main() -> None:
             download_version(args.version)
         return
 
-    # Default: ensure v3 (latest) is present
+    # Default: only download v3 (latest) — v1/v2 downloaded on-demand via API
     if already_downloaded("v3"):
-        print("[download_models] Artifacts already present — skipping download")
+        print("[download_models] v3 artifacts already present — skipping download")
         return
 
-    download_all()
+    download_version("v3")
 
 
 if __name__ == "__main__":

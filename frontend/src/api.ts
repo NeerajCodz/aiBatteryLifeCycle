@@ -69,10 +69,15 @@ export interface ModelVersionGroups {
 // ── Version management ───────────────────────────────────────────────────────
 export interface VersionInfo {
   id: string;            // "v1" | "v2" | "v3"
-  display: string;       // "Version 1" | "Version 2"
+  display: string;       // "v1.0" | "v2.0" | "v3.0"
+  description: string;
+  features: number | null;
+  champion: string | null;
+  on_disk: boolean;
   loaded: boolean;
   model_count: number;
-  status: "ready" | "not_downloaded" | "downloading" | "error";
+  catalog_count: number;
+  status: "ready" | "on_disk" | "not_downloaded" | "downloading" | "error";
 }
 
 export const fetchVersions = () =>
@@ -80,6 +85,10 @@ export const fetchVersions = () =>
 
 export const loadVersion = (version: string) =>
   baseApi.post<{ status: string; version: string }>(`/versions/${version}/load`).then((r) => r.data);
+
+/** Models metadata JSON for a specific version. */
+export const fetchVersionModelsMeta = (version: string) =>
+  baseApi.get<any>(`/versions/${version}/models-meta`).then((r) => r.data);
 
 export interface BatteryVizData {
   battery_id: string;

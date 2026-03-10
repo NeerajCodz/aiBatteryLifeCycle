@@ -12,19 +12,38 @@
 - **ReDoc:** `/redoc`
 - **Gradio UI:** `/gradio`
 
-## API Versioning (v2.1.0)
+## API Versioning (v3.0.0)
 
-The API supports two model generations served in parallel:
+The API supports three model generations served in parallel, with dynamic on-demand loading:
 
-| Prefix | Models | Split Strategy | Notes |
-|--------|--------|---------------|-------|
-| `/api/v1/*` | v1 models (cross-battery split) | Group-battery 80/20 | Legacy |
-| `/api/v2/*` | v2 models (chrono split, bug-fixed) | Intra-battery 80/20 | **Recommended** |
-| `/api/*` | Default (v2) | Same as v2 | Backward-compatible |
+| Prefix | Models | Features | Default Model | Status |
+|--------|--------|:--------:|---------------|--------|
+| `/api/v1/*` | v1 classical (12 models) | 12 | Random Forest | On-demand |
+| `/api/v2/*` | v2 classical + deep (20+ models) | 12 | ExtraTrees | On-demand |
+| `/api/v3/*` | v3 optimized + ensemble (18 models) | 18 | XGBoost | **Loaded at startup** |
+| `/api/*` | Default (v3) | 18 | XGBoost | Same as v3 |
 
-### v2 Bug Fixes
-- **avg_temp auto-correction removed** — v1 silently added 8°C to avg_temp
-- **Recommendation baseline fixed** — v1 re-predicted SOH, yielding ~0 improvement
+### Startup Behavior
+- Only **v3** models are loaded at startup to minimize memory and boot time.
+- v1 and v2 models can be loaded on-demand via `POST /api/versions/{v}/load`.
+- Each version's metadata is read from `artifacts/{version}/models.json`.
+
+### Version Management Endpoints
+
+```http
+GET /api/versions
+```
+Returns all versions with `on_disk`, `loaded`, `model_count`, `catalog_count`, `description`, `features`, `champion`, and `status`.
+
+```http
+POST /api/versions/{version}/load
+```
+Downloads (if needed) and loads a version's models into memory. Returns immediately if already on disk.
+
+```http
+GET /api/versions/{version}/models-meta
+```
+Returns the full `models.json` metadata for a version.
 
 ---
 

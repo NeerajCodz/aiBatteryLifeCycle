@@ -9,7 +9,7 @@ import {
   Trophy, Award, Medal, BarChart2, GitCompare, RefreshCcw, ChevronDown,
   ChevronUp, Info, AlertTriangle, CheckCircle2, Sliders,
 } from "lucide-react";
-import { fetchRecommendations, RecommendationResponse } from "../api";
+import { fetchRecommendations, fetchModels, RecommendationResponse, ModelInfo } from "../api";
 
 const CHART_COLORS = [
   "#22c55e", "#3b82f6", "#f59e0b", "#ef4444", "#8b5cf6",
@@ -52,11 +52,20 @@ export default function RecommendationPanel() {
   const [currentSoh, setCurrentSoh] = useState(85);
   const [ambientTemp, setAmbientTemp] = useState(24);
   const [topK, setTopK] = useState(5);
+  const [selectedModel, setSelectedModel] = useState<string | null>(null);
+  const [models, setModels] = useState<ModelInfo[]>([]);
   const [result, setResult] = useState<RecommendationResponse | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [expandedRow, setExpandedRow] = useState<number | null>(null);
   const [chartTab, setChartTab] = useState<"rul" | "params" | "radar">("rul");
+
+  // Fetch available models on mount
+  useState(() => {
+    fetchModels()
+      .then((m) => setModels(m.filter((mo) => mo.loaded)))
+      .catch(() => {});
+  });
 
   const handleSubmit = async () => {
     setLoading(true);
@@ -68,6 +77,7 @@ export default function RecommendationPanel() {
         current_soh: currentSoh,
         ambient_temperature: ambientTemp,
         top_k: topK,
+        ...(selectedModel ? { model_name: selectedModel } : {}),
       });
       setResult(res);
     } catch (e: any) {
@@ -151,6 +161,23 @@ export default function RecommendationPanel() {
                   className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white"
                 />
               </div>
+            </div>
+            {/* Model selector */}
+            <div>
+              <label className="block text-xs text-gray-400 mb-1">Model</label>
+              <select
+                value={selectedModel ?? ""}
+                onChange={(e) => setSelectedModel(e.target.value || null)}
+                className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white"
+              >
+                <option value="">Default (best available)</option>
+                {models.map((m) => (
+                  <option key={m.name} value={m.name}>
+                    {m.display_name ?? m.name}
+                    {m.r2 != null ? ` (R²=${m.r2.toFixed(3)})` : ""}
+                  </option>
+                ))}
+              </select>
             </div>
           </div>
           {/* Sliders */}

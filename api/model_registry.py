@@ -1,14 +1,14 @@
 """
 api.model_registry
 ==================
-Singleton model registry providing unified loading, versioning, and inference
+Dynamic model registry providing unified loading, versioning, and inference
 for all trained battery lifecycle models.
 
-Model versioning
-----------------
-* v1.x  — Classical (tree-based / linear) models trained in NB03.
-* v2.x  — Deep sequence models trained in NB04 – NB07.
-* v3.x  — Ensemble / meta-models trained in NB08.
+Catalog source
+--------------
+Each version's model metadata, feature columns, scaler paths, and ensemble
+configuration are loaded dynamically from ``artifacts/<version>/models.json``.
+There is no hardcoded model catalog — the JSON file is the single source of truth.
 
 Usage
 -----
@@ -90,41 +90,23 @@ _NON_FEATURE_COLS: frozenset[str] = frozenset({
     "degradation_state", "coulombic_efficiency",
 })
 
-# ── Model catalog (single source of truth for versions & metadata) ────────────
-MODEL_CATALOG: dict[str, dict[str, Any]] = {
-    "random_forest":          {"version": "3.0.0", "display_name": "Random Forest",                  "family": "classical",    "algorithm": "RandomForestRegressor",       "target": "soh", "r2": 0.9814},
-    "xgboost":                {"version": "3.0.0", "display_name": "XGBoost",                        "family": "classical",    "algorithm": "XGBRegressor",                "target": "soh", "r2": 0.9866},
-    "lightgbm":               {"version": "3.0.0", "display_name": "LightGBM",                       "family": "classical",    "algorithm": "LGBMRegressor",               "target": "soh", "r2": 0.9826},
-    "ridge":                  {"version": "1.0.0", "display_name": "Ridge Regression",               "family": "classical",    "algorithm": "Ridge",                      "target": "soh", "r2": 0.72},
-    "svr":                    {"version": "1.0.0", "display_name": "SVR (RBF)",                      "family": "classical",    "algorithm": "SVR",                        "target": "soh", "r2": 0.805},
-    "lasso":                  {"version": "1.0.0", "display_name": "Lasso",                          "family": "classical",    "algorithm": "Lasso",                      "target": "soh", "r2": 0.52},
-    "elasticnet":             {"version": "1.0.0", "display_name": "ElasticNet",                     "family": "classical",    "algorithm": "ElasticNet",                 "target": "soh", "r2": 0.52},
-    "knn_k5":                 {"version": "1.0.0", "display_name": "KNN (k=5)",                     "family": "classical",    "algorithm": "KNeighborsRegressor",        "target": "soh", "r2": 0.72},
-    "knn_k10":                {"version": "1.0.0", "display_name": "KNN (k=10)",                    "family": "classical",    "algorithm": "KNeighborsRegressor",        "target": "soh", "r2": 0.724},
-    "knn_k20":                {"version": "1.0.0", "display_name": "KNN (k=20)",                    "family": "classical",    "algorithm": "KNeighborsRegressor",        "target": "soh", "r2": 0.717},
-    "extra_trees":            {"version": "3.0.0", "display_name": "ExtraTrees",                     "family": "classical",    "algorithm": "ExtraTreesRegressor",        "target": "soh", "r2": 0.9701},
-    "gradient_boosting":      {"version": "3.0.0", "display_name": "GradientBoosting",               "family": "classical",    "algorithm": "GradientBoostingRegressor",  "target": "soh", "r2": 0.9860},
-    "vanilla_lstm":           {"version": "2.0.0", "display_name": "Vanilla LSTM",                   "family": "deep_pytorch", "algorithm": "VanillaLSTM",                "target": "soh", "r2": 0.507},
-    "bidirectional_lstm":     {"version": "2.0.0", "display_name": "Bidirectional LSTM",             "family": "deep_pytorch", "algorithm": "BidirectionalLSTM",          "target": "soh", "r2": 0.520},
-    "gru":                    {"version": "2.0.0", "display_name": "GRU",                            "family": "deep_pytorch", "algorithm": "GRUModel",                   "target": "soh", "r2": 0.510},
-    "attention_lstm":         {"version": "2.0.0", "display_name": "Attention LSTM",                 "family": "deep_pytorch", "algorithm": "AttentionLSTM",              "target": "soh", "r2": 0.540},
-    "batterygpt":             {"version": "2.1.0", "display_name": "BatteryGPT",                     "family": "deep_pytorch", "algorithm": "BatteryGPT",                "target": "soh", "r2": 0.881},
-    "tft":                    {"version": "2.2.0", "display_name": "Temporal Fusion Transformer",    "family": "deep_pytorch", "algorithm": "TemporalFusionTransformer",    "target": "soh", "r2": 0.881},
-    "vae_lstm":               {"version": "2.3.0", "display_name": "VAE-LSTM",                       "family": "deep_pytorch", "algorithm": "VAE_LSTM",               "target": "soh", "r2": 0.730},
-    "itransformer":           {"version": "2.4.0", "display_name": "iTransformer",                   "family": "deep_keras",   "algorithm": "iTransformer",               "target": "soh", "r2": 0.595},
-    "physics_itransformer":   {"version": "2.4.1", "display_name": "Physics iTransformer",           "family": "deep_keras",   "algorithm": "PhysicsITransformer",        "target": "soh", "r2": 0.600},
-    "dynamic_graph_itransformer": {"version": "2.5.0", "display_name": "DG-iTransformer",           "family": "deep_keras",   "algorithm": "DynamicGraphITransformer",   "target": "soh", "r2": 0.595},
-    "best_ensemble":          {"version": "3.0.0", "display_name": "Best Ensemble (RF+XGB+LGB)",     "family": "ensemble",     "algorithm": "WeightedAverage",            "target": "soh", "r2": 0.9810},
-}
+# ── Dynamic catalog loading from models.json ─────────────────────────────────
+def _load_version_meta(version: str) -> dict[str, Any]:
+    """Load the full models.json for a given artifact version.
 
-# R²-proportional weights for BestEnsemble (v3 values)
-_ENSEMBLE_WEIGHTS: dict[str, float] = {
-    "random_forest":     0.9814,
-    "xgboost":           0.9866,
-    "lightgbm":          0.9826,
-    "extra_trees":       0.9701,
-    "gradient_boosting": 0.9860,
-}
+    Returns the entire JSON dict (version, display, feature_set, models, scalers,
+    champion, etc.).  Falls back to an empty dict if not found.
+    """
+    json_path = _ARTIFACTS / version / "models.json"
+    if not json_path.exists():
+        log.warning("models.json not found for %s — catalog will be empty", version)
+        return {}
+    try:
+        with open(json_path, encoding="utf-8") as fh:
+            return json.load(fh)
+    except Exception as exc:
+        log.warning("Could not read models.json for %s: %s", version, exc)
+        return {}
 
 
 # ── Degradation state ───────────────────────────────────────────────────────
@@ -166,12 +148,8 @@ class ModelRegistry:
         PyTorch device string — ``"cuda"`` when a GPU is available, else ``"cpu"``.
     """
 
-    # Model families that need the linear StandardScaler at inference
-    _LINEAR_FAMILIES = {"ridge", "lasso", "elasticnet", "svr",
-                        "knn_k5", "knn_k10", "knn_k20"}
-    # Tree families that are scale-invariant (no scaler needed)
-    _TREE_FAMILIES = {"random_forest", "xgboost", "lightgbm", "best_ensemble",
-                      "extra_trees", "gradient_boosting"}
+    # ── NOTE: _LINEAR_FAMILIES / _TREE_FAMILIES removed ──
+    # Scaling is now determined per-model from models.json "requires_scaling" field.
 
     def __init__(self, version: str = "v1"):
         self.models: dict[str, Any] = {}
@@ -180,7 +158,6 @@ class ModelRegistry:
         self.scaler = None          # kept for backward compat
         self.linear_scaler = None   # StandardScaler for Ridge/Lasso/SVR/KNN
         self.sequence_scaler = None # StandardScaler for sequence deep models
-        self.feature_cols: list[str] = list(FEATURE_COLS_SCALAR)  # updated by load_all
         self.device = "cpu"
         self.version = version
         # Set version-aware paths
@@ -188,6 +165,25 @@ class ModelRegistry:
         self._models_dir = vp["models_dir"]
         self._artifacts = vp["artifacts"]
         self._scalers_dir = vp["scalers"]
+        # ── Dynamic catalog from models.json ──
+        self._version_meta: dict[str, Any] = _load_version_meta(version)
+        self._catalog: dict[str, dict[str, Any]] = self._version_meta.get("models", {})
+        # Feature columns from JSON, fallback to module-level constants
+        json_features = self._version_meta.get("feature_set")
+        if json_features:
+            self.feature_cols: list[str] = list(json_features)
+        elif version == "v3":
+            self.feature_cols = list(V3_FEATURE_COLS)
+        else:
+            self.feature_cols = list(FEATURE_COLS_SCALAR)
+        # Ensemble config from catalog
+        ensemble_info = self._catalog.get("best_ensemble", {})
+        self._ensemble_components: list[str] = ensemble_info.get("components", [])
+        # R²-proportional weights computed from component catalog entries
+        self._ensemble_weights: dict[str, float] = {}
+        for cname in self._ensemble_components:
+            cinfo = self._catalog.get(cname, {})
+            self._ensemble_weights[cname] = cinfo.get("r2", 1.0)
 
     # ── Loading ──────────────────────────────────────────────────────────
     def load_all(self) -> None:
@@ -234,10 +230,10 @@ class ModelRegistry:
                 continue
             try:
                 self.models[name] = joblib.load(p)
-                catalog = MODEL_CATALOG.get(name, {})
+                catalog = self._catalog.get(name, {})
                 self.model_meta[name] = {
                     **catalog,
-                    "family": "classical",
+                    "family": catalog.get("family", "classical"),
                     "loaded": True,
                     "path": str(p),
                 }
@@ -324,7 +320,7 @@ class ModelRegistry:
             model = self._build_pytorch_model(name, n_feat=n_feat)
             if model is None:
                 self.model_meta[name] = {
-                    **MODEL_CATALOG.get(name, {}),
+                    **self._catalog.get(name, {}),
                     "family": "deep_pytorch", "loaded": False,
                     "path": str(p), "load_error": "architecture unavailable",
                 }
@@ -335,7 +331,7 @@ class ModelRegistry:
                 model.to(self.device)
                 model.eval()
                 self.models[name] = model
-                catalog = MODEL_CATALOG.get(name, {})
+                catalog = self._catalog.get(name, {})
                 self.model_meta[name] = {
                     **catalog, "family": "deep_pytorch",
                     "loaded": True, "path": str(p), "n_feat": n_feat,
@@ -344,7 +340,7 @@ class ModelRegistry:
             except Exception as exc:
                 log.warning("Could not load PyTorch '%s': %s", name, exc)
                 self.model_meta[name] = {
-                    **MODEL_CATALOG.get(name, {}),
+                    **self._catalog.get(name, {}),
                     "family": "deep_pytorch", "loaded": False,
                     "path": str(p), "load_error": str(exc),
                 }
@@ -385,7 +381,7 @@ class ModelRegistry:
             try:
                 model = tf.keras.models.load_model(str(p), custom_objects=_custom_objects, safe_mode=False)
                 self.models[name] = model
-                catalog = MODEL_CATALOG.get(name, {})
+                catalog = self._catalog.get(name, {})
                 self.model_meta[name] = {
                     **catalog, "family": "deep_keras",
                     "loaded": True, "path": str(p),
@@ -394,20 +390,24 @@ class ModelRegistry:
             except Exception as exc:
                 log.warning("Could not load Keras '%s': %s", name, exc)
                 self.model_meta[name] = {
-                    **MODEL_CATALOG.get(name, {}),
+                    **self._catalog.get(name, {}),
                     "family": "deep_keras", "loaded": False,
                     "path": str(p), "load_error": str(exc),
                 }
 
     def _register_ensemble(self) -> None:
         """Register the BestEnsemble virtual model when components are loaded."""
-        available = [m for m in _ENSEMBLE_WEIGHTS if m in self.models]
+        if not self._ensemble_components:
+            log.warning("BestEnsemble: no components defined in models.json")
+            return
+        available = [m for m in self._ensemble_components if m in self.models]
         if not available:
             log.warning("BestEnsemble: no component models loaded")
             return
         self.models["best_ensemble"] = "virtual_ensemble"
+        catalog = self._catalog.get("best_ensemble", {})
         self.model_meta["best_ensemble"] = {
-            **MODEL_CATALOG["best_ensemble"],
+            **catalog,
             "components": available, "loaded": True,
         }
         log.info("BestEnsemble registered — components: %s", ", ".join(available))
@@ -464,26 +464,23 @@ class ModelRegistry:
     def _load_feature_cols(self) -> list[str]:
         """Return the feature column names for this registry version.
 
-        v3 uses the hardcoded V3_FEATURE_COLS list (18 features in the exact
-        order used during NB08 training, verified against the v3 scaler means).
-        v1 / v2 use the 12-feature FEATURE_COLS_SCALAR baseline.
+        Reads from `self.feature_cols` which was already populated from
+        models.json in __init__.  Falls back to module-level constants.
+        Verifies against the loaded scaler's expected feature count.
         """
-        if self.version == "v3":
-            # Verify against scaler (sanity check, warns if mismatch).
-            n_expected = getattr(self.linear_scaler, "n_features_in_", None)
-            if n_expected and n_expected != len(V3_FEATURE_COLS):
-                log.warning(
-                    "v3 scaler expects %d features but V3_FEATURE_COLS has %d — "
-                    "using V3_FEATURE_COLS",
-                    n_expected, len(V3_FEATURE_COLS),
-                )
-            log.info(
-                "Feature columns: V3_FEATURE_COLS (%d features, FEAT_SCALAR + 6 engineered)",
-                len(V3_FEATURE_COLS),
+        cols = self.feature_cols  # already set from JSON in __init__
+        # Verify against scaler (sanity check, warns if mismatch).
+        n_expected = getattr(self.linear_scaler, "n_features_in_", None)
+        if n_expected and n_expected != len(cols):
+            log.warning(
+                "%s scaler expects %d features but feature_cols has %d",
+                self.version, n_expected, len(cols),
             )
-            return list(V3_FEATURE_COLS)
-        log.info("Using default FEATURE_COLS_SCALAR (%d features)", len(FEATURE_COLS_SCALAR))
-        return list(FEATURE_COLS_SCALAR)
+        log.info(
+            "Feature columns for %s: %d features",
+            self.version, len(cols),
+        )
+        return list(cols)
 
     def _choose_default(self) -> None:
         """Select the highest-quality loaded model as the registry default."""
@@ -514,7 +511,7 @@ class ModelRegistry:
 
         CSV model name headers are normalised to lower-case underscore keys.
         Entries missing from result files fall back to the ``r2`` field in
-        :data:`MODEL_CATALOG`.
+        the version's ``models.json`` catalog.
         """
         _normalise = {
             "RandomForest": "random_forest", "LightGBM": "lightgbm",
@@ -556,7 +553,7 @@ class ModelRegistry:
             except Exception as exc:
                 log.warning("Could not read %s: %s", json_name, exc)
         # Fill from catalog for anything not in result files
-        for name, info in MODEL_CATALOG.items():
+        for name, info in self._catalog.items():
             if name not in results and "r2" in info:
                 results[name] = {"R2": info["r2"]}
         return results
@@ -640,14 +637,14 @@ class ModelRegistry:
         Both cases handled by :meth:`_x_for_model`.
         """
         components = self.model_meta.get("best_ensemble", {}).get(
-            "components", list(_ENSEMBLE_WEIGHTS.keys())
+            "components", self._ensemble_components
         )
         total_w, weighted_sum = 0.0, 0.0
         used: list[str] = []
         for cname in components:
             if cname not in self.models:
                 continue
-            w = _ENSEMBLE_WEIGHTS.get(cname, 1.0)
+            w = self._ensemble_weights.get(cname, 1.0)
             xi = self._x_for_model(self.models[cname], x)
             soh = float(self.models[cname].predict(xi)[0])
             weighted_sum += w * soh
@@ -726,8 +723,8 @@ class ModelRegistry:
                 except Exception as exc:
                     log.error("Keras inference error for '%s': %s", name, exc)
                     raise
-            elif name in self._LINEAR_FAMILIES:
-                # Ridge/Lasso/ElasticNet/SVR/KNN need StandardScaler
+            elif self._catalog.get(name, {}).get("requires_scaling", False):
+                # Linear/KNN models need StandardScaler
                 x_lin = self._scale_for_linear(x)
                 soh = float(model.predict(x_lin)[0])
             else:
@@ -762,7 +759,7 @@ class ModelRegistry:
             rul = 0.0
 
         # Normalize version to registry major (e.g. v3 registry → 3.0.0)
-        raw_ver = self.model_meta.get(name, MODEL_CATALOG.get(name, {})).get("version", "?")
+        raw_ver = self.model_meta.get(name, self._catalog.get(name, {})).get("version", "?")
         if raw_ver and raw_ver != "?":
             ver_major = raw_ver.split(".")[0]
             reg_major = self.version.lstrip("v")
@@ -839,7 +836,7 @@ class ModelRegistry:
 
         if name == "best_ensemble":
             components = self.model_meta.get("best_ensemble", {}).get(
-                "components", list(_ENSEMBLE_WEIGHTS.keys())
+                "components", self._ensemble_components
             )
             total_w: float = 0.0
             weighted_sum: np.ndarray | None = None
@@ -847,7 +844,7 @@ class ModelRegistry:
             for cname in components:
                 if cname not in self.models:
                     continue
-                w   = _ENSEMBLE_WEIGHTS.get(cname, 1.0)
+                w   = self._ensemble_weights.get(cname, 1.0)
                 xi  = self._x_for_model(self.models[cname], _pad_X(X, self.models[cname]))
                 preds = np.asarray(self.models[cname].predict(xi), dtype=float)
                 weighted_sum = preds * w if weighted_sum is None else weighted_sum + preds * w
@@ -866,7 +863,7 @@ class ModelRegistry:
                     "batch-predicted. Use predict() per sample instead."
                 )
             Xp = _pad_X(X, model)
-            if name in self._LINEAR_FAMILIES:
+            if self._catalog.get(name, {}).get("requires_scaling", False):
                 xi = self._scale_for_linear(Xp)
             else:
                 xi = self._x_for_model(model, Xp)
@@ -891,8 +888,7 @@ class ModelRegistry:
         # Registry version prefix: "v1" -> "1", "v2" -> "2", "v3" -> "3"
         reg_major = self.version.lstrip("v")
         out: list[dict[str, Any]] = []
-        for name in MODEL_CATALOG:
-            catalog = MODEL_CATALOG[name]
+        for name, catalog in self._catalog.items():
             meta = self.model_meta.get(name, {})
             # Normalize version to registry major (e.g. v3 deep model shows 3.0.0, not 2.4.0)
             raw_ver = meta.get("version") or catalog.get("version", "?")

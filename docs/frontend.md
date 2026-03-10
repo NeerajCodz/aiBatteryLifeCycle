@@ -77,8 +77,9 @@ Four-section analytics dashboard:
 - `SohBadge` component with dynamic colour + icon
 
 ### RecommendationPanel
-Interactive optimizer replacing the previous plain form + table:
+Interactive optimizer with model selection:
 
+- **Model selector** — Dropdown listing all loaded models with R² scores, enabling per-model optimization
 - **Input form** — Text input for battery ID, range sliders for SOH and ambient temperature, numeric inputs for cycle and top-k
 - **Summary cards** — Battery ID, best predicted RUL, best improvement, config count
 - **Visual Analysis tabs:**
@@ -101,7 +102,8 @@ Interactive optimizer replacing the previous plain form + table:
 - 12-input form with all engineered cycle features
 - SOH gauge visualization (SVG ring) with degradation state colour
 - Confidence interval display
-- Model selector (v2 models / best_ensemble)
+- Model selector (v3 models / best_ensemble)
+- Version selector with download/load/switch states
 
 ## API Integration (`api.ts`)
 
@@ -112,11 +114,13 @@ All API calls return typed TypeScript response objects:
 | `fetchDashboard()` | `GET /api/dashboard` | Fleet overview + capacity fade data |
 | `fetchBatteries()` | `GET /api/batteries` | All battery metadata |
 | `fetchBatteryCapacity(id)` | `GET /api/battery/{id}/capacity` | Per-battery cycles, capacity, SOH arrays |
-| `predictSoh(req)` | `POST /api/v2/predict` | Single-cycle SOH + RUL prediction |
-| `fetchRecommendations(req)` | `POST /api/v2/recommend` | Operating condition optimization |
-| `simulateBatteries(req)` | `POST /api/v2/simulate` | Multi-battery lifecycle simulation |
+| `predictSoh(req)` | `POST /api/v3/predict` | Single-cycle SOH + RUL prediction |
+| `fetchRecommendations(req)` | `POST /api/v3/recommend` | Operating condition optimization |
+| `simulateBatteries(req)` | `POST /api/v3/simulate` | Multi-battery lifecycle simulation |
 | `fetchMetrics()` | `GET /api/metrics` | Full model evaluation metrics |
-| `fetchModels()` | `GET /api/v2/models` | All loaded models with metadata |
+| `fetchModels()` | `GET /api/v3/models` | All loaded models with metadata |
+| `fetchVersions()` | `GET /api/versions` | Version metadata, status, model counts |
+| `fetchVersionModelsMeta(v)` | `GET /api/versions/{v}/models-meta` | Per-version model catalog from models.json |
 
 ## Development
 
