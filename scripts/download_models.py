@@ -90,6 +90,27 @@ def _ensure_hub():
                                "huggingface_hub>=0.23", "-q"])
 
 
+def write_datamap(version: str) -> None:
+    """Write artifacts/<version>/datamap.json listing all locally available files."""
+    vroot = ARTIFACTS_DIR / version
+    vroot.mkdir(parents=True, exist_ok=True)
+    items = []
+    for p in sorted(vroot.rglob("*")):
+        if not p.is_file():
+            continue
+        rel = p.relative_to(vroot).as_posix()
+        items.append({
+            "path": rel,
+            "bytes": p.stat().st_size,
+        })
+    out = {
+        "version": version,
+        "count": len(items),
+        "files": items,
+    }
+    (vroot / "datamap.json").write_text(json.dumps(out, indent=2), encoding="utf-8")
+
+
 def download_version(version: str) -> None:
     """Download a single version (e.g. 'v1' or 'v2') from HF Hub into artifacts/."""
     _ensure_hub()
@@ -100,6 +121,7 @@ def download_version(version: str) -> None:
         allow_patterns=[f"{version}/**"],
         ignore_patterns=["*.log"],
     ))
+    write_datamap(version)
     print(f"[download_models] {version}/ ready")
 
 
@@ -199,6 +221,7 @@ def download_models(version: str, model_names: list[str]) -> None:
         allow_patterns=allow,
         ignore_patterns=["*.log"],
     ))
+    write_datamap(version)
     print(f"[download_models] Selected model artifacts ready for {version}")
 
 
@@ -207,17 +230,41 @@ def download_model(version: str, model_name: str) -> None:
     download_models(version, [model_name])
 
 
+def download_metrics_bundle(version: str) -> None:
+    """Download files needed by metrics page for a specific version."""
+    _ensure_hub()
+    from huggingface_hub import snapshot_download
+    ARTIFACTS_DIR.mkdir(parents=True, exist_ok=True)
+    allow = [
+        f"{version}/models.json",
+        f"{version}/datamap.json",
+        f"{version}/results/**",
+        f"{version}/reports/**",
+        f"{version}/features/**",
+        f"{version}/figures/**",
+    ]
+    print(f"[download_models] Downloading metrics bundle for {version}")
+    snapshot_download(**_hf_kwargs(
+        allow_patterns=allow,
+        ignore_patterns=["*.log"],
+    ))
+    write_datamap(version)
+    print(f"[download_models] Metrics bundle ready for {version}")
+
+
 def download_models_meta_only(versions: list[str]) -> None:
     """Download only models.json for listed versions."""
     _ensure_hub()
     from huggingface_hub import snapshot_download
     ARTIFACTS_DIR.mkdir(parents=True, exist_ok=True)
-    allow = [f"{v}/models.json" for v in versions]
+    allow = [f"{v}/models.json" for v in versions] + [f"{v}/datamap.json" for v in versions]
     print(f"[download_models] Downloading metadata files: {allow}")
     snapshot_download(**_hf_kwargs(
         allow_patterns=allow,
         ignore_patterns=["*.log"],
     ))
+    for v in versions:
+        write_datamap(v)
     print("[download_models] Metadata ready")
 
 
@@ -228,8 +275,16 @@ def download_all() -> None:
     ARTIFACTS_DIR.mkdir(parents=True, exist_ok=True)
     print(f"[download_models] Downloading all versions from {REPO_ID} -> {ARTIFACTS_DIR}")
     snapshot_download(**_hf_kwargs(ignore_patterns=["*.log"]))
+    for v in ("v1", "v2", "v3"):
+        write_datamap(v)
     SENTINEL.write_text("downloaded\n")
     print("[download_models] Artifacts ready")
+
+
+def ensure_metadata_first(versions: list[str] | None = None) -> None:
+    """Guarantee models.json/datamap are present before registry usage."""
+    versions = versions or ["v1", "v2", "v3"]
+    download_models_meta_only(versions)
 
 
 def main() -> None:

@@ -53,7 +53,12 @@ from fastapi.responses import FileResponse
 
 from api.model_registry import registry, registry_v1, registry_v2, registry_v3
 from api.schemas import HealthResponse
-from scripts.download_models import select_top_models, DEFAULT_STARTUP_TOP_MODELS
+from scripts.download_models import (
+    select_top_models,
+    DEFAULT_STARTUP_TOP_MODELS,
+    ensure_metadata_first,
+    write_datamap,
+)
 from src.utils.logger import get_logger
 
 log = get_logger(__name__)
@@ -70,6 +75,11 @@ _FRONTEND_DIST = _HERE.parent / "frontend" / "dist"
 async def lifespan(app: FastAPI):
     """Start API immediately; bootstrap top v3 models in background."""
     log.info("Loading model registries …")
+    # Hard requirement: metadata must exist first for all versions.
+    await asyncio.to_thread(ensure_metadata_first, ["v1", "v2", "v3"])
+    for reg in _REGISTRIES.values():
+        reg.refresh_metadata()
+
     _version_status["v3"] = "downloading"
     app.state.v3_bootstrap_task = asyncio.create_task(_bg_bootstrap_v3())
     log.info("v3 bootstrap started in background — API is available immediately")
@@ -147,6 +157,7 @@ async def list_versions():
     out = []
     for v in ["v3", "v2", "v1"]:
         reg = _REGISTRIES[v]
+        reg.ensure_metadata_loaded()
         on_disk = _version_loaded(v)
         in_memory = reg.model_count > 0
         meta = reg._version_meta  # from models.json (loaded in __init__)
@@ -177,6 +188,7 @@ async def _bg_load_version(version: str) -> None:
         )
         await proc.wait()
         if proc.returncode == 0:
+            _REGISTRIES[version].refresh_metadata()
             _REGISTRIES[version].load_all()
             _version_status[version] = "ready"
             log.info("Version %s loaded on demand — %d models", version,
@@ -208,6 +220,7 @@ async def _bg_bootstrap_v3() -> None:
 
         startup_models = select_top_models("v3")
         if startup_models:
+            registry_v3.refresh_metadata()
             registry_v3.load_all(only_models=set(startup_models))
             log.info(
                 "v3 registry ready — %d models loaded (startup top-%d set: %s)",
@@ -228,7 +241,7 @@ async def _bg_bootstrap_v3() -> None:
         log.error("Failed during v3 bootstrap: %s", exc)
 
 
-async def _bg_load_model(version: str, model_name: str) -> None:
+async def _bg_download_model(version: str, model_name: str) -> None:
     import sys as _sys
 
     key = _model_status_key(version, model_name)
@@ -244,15 +257,16 @@ async def _bg_load_model(version: str, model_name: str) -> None:
             stderr=asyncio.subprocess.STDOUT,
         )
         await proc.wait()
-        if proc.returncode == 0 and _REGISTRIES[version].load_model(model_name):
-            _model_status[key] = "ready"
-            log.info("Model %s/%s loaded on demand", version, model_name)
+        _REGISTRIES[version].refresh_metadata()
+        if proc.returncode == 0 and _REGISTRIES[version].model_on_disk(model_name):
+            _model_status[key] = "on_disk"
+            log.info("Model %s/%s downloaded on demand", version, model_name)
         else:
             _model_status[key] = "error"
-            log.error("Failed to download/load model %s/%s", version, model_name)
+            log.error("Failed to download model %s/%s", version, model_name)
     except Exception as exc:
         _model_status[key] = "error"
-        log.error("Failed to load model %s/%s: %s", version, model_name, exc)
+        log.error("Failed to download model %s/%s: %s", version, model_name, exc)
 
 
 @app.post("/api/versions/{version}/load", tags=["meta"])
@@ -260,6 +274,8 @@ async def load_version(version: str, background_tasks: BackgroundTasks):
     """Download + activate a model version from HF Hub (runs in background)."""
     if version not in _REGISTRIES:
         raise HTTPException(status_code=400, detail=f"Unknown version '{version}'")
+    await asyncio.to_thread(ensure_metadata_first, [version])
+    _REGISTRIES[version].refresh_metadata()
     if _version_status.get(version) == "downloading":
         return {"status": "downloading", "version": version}
     # If artifacts exist on disk but not loaded, just load without downloading
@@ -282,10 +298,30 @@ async def get_version_models_meta(version: str):
     """Return models.json metadata for a specific version."""
     if version not in _REGISTRIES:
         raise HTTPException(status_code=400, detail=f"Unknown version '{version}'")
+    await asyncio.to_thread(ensure_metadata_first, [version])
+    _REGISTRIES[version].refresh_metadata()
     meta_path = _artifacts_dir() / version / "models.json"
     if not meta_path.exists():
         raise HTTPException(status_code=404, detail=f"models.json not found for {version}")
-    return _json.loads(meta_path.read_text(encoding="utf-8"))
+    datamap_path = _artifacts_dir() / version / "datamap.json"
+    if not datamap_path.exists():
+        await asyncio.to_thread(write_datamap, version)
+    return {
+        "models_meta": _json.loads(meta_path.read_text(encoding="utf-8")),
+        "datamap": _json.loads(datamap_path.read_text(encoding="utf-8")) if datamap_path.exists() else {},
+    }
+
+
+@app.get("/api/versions/{version}/datamap", tags=["meta"])
+async def get_version_datamap(version: str):
+    """Return datamap.json for a specific version; generate if missing."""
+    if version not in _REGISTRIES:
+        raise HTTPException(status_code=400, detail=f"Unknown version '{version}'")
+    await asyncio.to_thread(ensure_metadata_first, [version])
+    datamap_path = _artifacts_dir() / version / "datamap.json"
+    if not datamap_path.exists():
+        await asyncio.to_thread(write_datamap, version)
+    return _json.loads(datamap_path.read_text(encoding="utf-8"))
 
 
 @app.get("/api/versions/{version}/models", tags=["meta"])
@@ -294,7 +330,9 @@ async def list_version_models(version: str):
     if version not in _REGISTRIES:
         raise HTTPException(status_code=400, detail=f"Unknown version '{version}'")
 
+    await asyncio.to_thread(ensure_metadata_first, [version])
     reg = _REGISTRIES[version]
+    reg.refresh_metadata()
     rows = []
     for model_name, info in reg._catalog.items():
         key = _model_status_key(version, model_name)
@@ -317,11 +355,13 @@ async def list_version_models(version: str):
 
 @app.post("/api/versions/{version}/models/{model_name}/load", tags=["meta"])
 async def load_single_model(version: str, model_name: str, background_tasks: BackgroundTasks):
-    """Download + activate one model without loading an entire version."""
+    """Two-step per-model action: download first, then load into memory."""
     if version not in _REGISTRIES:
         raise HTTPException(status_code=400, detail=f"Unknown version '{version}'")
 
+    await asyncio.to_thread(ensure_metadata_first, [version])
     reg = _REGISTRIES[version]
+    reg.refresh_metadata()
     if model_name not in reg._catalog:
         raise HTTPException(status_code=404, detail=f"Unknown model '{model_name}' in {version}")
 
@@ -343,7 +383,7 @@ async def load_single_model(version: str, model_name: str, background_tasks: Bac
         raise HTTPException(status_code=500, detail=f"Model '{model_name}' exists on disk but failed to load")
 
     _model_status[key] = "downloading"
-    background_tasks.add_task(_bg_load_model, version, model_name)
+    background_tasks.add_task(_bg_download_model, version, model_name)
     return {"status": "downloading", "version": version, "model": model_name}
 
 

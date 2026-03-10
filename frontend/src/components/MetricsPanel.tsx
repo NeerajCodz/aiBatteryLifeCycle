@@ -99,7 +99,11 @@ function StatCard({ label, value, color = "text-green-400", subtitle, icon, tren
   );
 }
 
-export default function MetricsPanel() {
+type Props = {
+  apiVersion?: "v1" | "v2" | "v3";
+};
+
+export default function MetricsPanel({ apiVersion = "v3" }: Props) {
   const [data, setData] = useState<MetricsData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -113,6 +117,10 @@ export default function MetricsPanel() {
   const [compareMode, setCompareMode] = useState(false);
   const [compareSelected, setCompareSelected] = useState<string[]>([]);
   const [chartView, setChartView] = useState<"bar" | "radar" | "scatter">("bar");
+
+  useEffect(() => {
+    setActiveVersion(apiVersion);
+  }, [apiVersion]);
 
   useEffect(() => {
     setLoading(true);

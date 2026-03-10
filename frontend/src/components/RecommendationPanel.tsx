@@ -1,4 +1,7 @@
 import { useEffect, useState, useMemo } from "react";
+import { Canvas } from "@react-three/fiber";
+import { OrbitControls, Html } from "@react-three/drei";
+import * as THREE from "three";
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer,
   CartesianGrid, RadarChart, Radar, PolarGrid, PolarAngleAxis, PolarRadiusAxis,
@@ -50,6 +53,40 @@ type Props = {
   apiVersion: "v1" | "v2" | "v3";
 };
 
+function Battery3D({ currentSoh, projectedSoh }: { currentSoh: number; projectedSoh: number }) {
+  const clamped = Math.max(0, Math.min(100, projectedSoh));
+  const fillHeight = 0.2 + (clamped / 100) * 2.6;
+  const fillY = -1.4 + fillHeight / 2;
+  const color = clamped >= 90 ? "#22c55e" : clamped >= 80 ? "#eab308" : clamped >= 70 ? "#f97316" : "#ef4444";
+
+  return (
+    <Canvas camera={{ position: [3.2, 2.2, 3.2], fov: 45 }}>
+      <ambientLight intensity={0.7} />
+      <directionalLight position={[3, 5, 2]} intensity={1.1} />
+      <group>
+        <mesh>
+          <cylinderGeometry args={[0.9, 0.9, 3.1, 48]} />
+          <meshPhysicalMaterial color="#94a3b8" transparent opacity={0.16} transmission={0.8} roughness={0.05} />
+        </mesh>
+        <mesh position={[0, fillY, 0]}>
+          <cylinderGeometry args={[0.76, 0.76, fillHeight, 48]} />
+          <meshStandardMaterial color={color} emissive={color} emissiveIntensity={0.3} roughness={0.35} />
+        </mesh>
+        <mesh position={[0, 1.75, 0]}>
+          <cylinderGeometry args={[0.24, 0.24, 0.22, 24]} />
+          <meshStandardMaterial color="#e5e7eb" metalness={0.9} roughness={0.1} />
+        </mesh>
+        <Html position={[0, -2.15, 0]} center>
+          <div className="text-xs text-gray-300 bg-gray-900/80 border border-gray-700 rounded px-2 py-1">
+            SOH: <span className="font-semibold text-white">{currentSoh.toFixed(1)}%</span> → <span className="font-semibold" style={{ color }}>{clamped.toFixed(1)}%</span>
+          </div>
+        </Html>
+      </group>
+      <OrbitControls enablePan={false} maxDistance={6} minDistance={2.4} />
+    </Canvas>
+  );
+}
+
 export default function RecommendationPanel({ apiVersion }: Props) {
   const [batteryId, setBatteryId] = useState("B0005");
   const [currentCycle, setCurrentCycle] = useState(100);
@@ -62,6 +99,7 @@ export default function RecommendationPanel({ apiVersion }: Props) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [expandedRow, setExpandedRow] = useState<number | null>(null);
+  const [selectedRank, setSelectedRank] = useState<number>(1);
   const [chartTab, setChartTab] = useState<"rul" | "params" | "radar">("rul");
 
   // Fetch available loaded models for selector
@@ -84,6 +122,7 @@ export default function RecommendationPanel({ apiVersion }: Props) {
         ...(selectedModel ? { model_name: selectedModel } : {}),
       });
       setResult(res);
+      setSelectedRank(1);
     } catch (e: any) {
       setError(e.response?.data?.detail || e.message);
     } finally {
@@ -127,6 +166,8 @@ export default function RecommendationPanel({ apiVersion }: Props) {
 
   const baseline = result?.recommendations[0];
   const bestOnly = result?.recommendations.find((r) => r.rank === 1);
+  const selectedRec = result?.recommendations.find((r) => r.rank === selectedRank) ?? bestOnly;
+  const projectedSoh = Math.min(100, currentSoh + ((selectedRec?.rul_improvement_pct ?? 0) / 6));
 
   return (
     <div className="space-y-5">
@@ -327,18 +368,19 @@ export default function RecommendationPanel({ apiVersion }: Props) {
             )}
           </div>
 
-          {/* Recommendations table */}
-          <div className="bg-gray-900 rounded-xl border border-gray-800 overflow-hidden">
-            <div className="p-4 border-b border-gray-800 flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <Trophy className="w-4 h-4 text-yellow-400" />
-                <span className="text-sm font-semibold text-gray-300">
-                  Recommendations for {result.battery_id} — SOH: {result.current_soh}%
-                </span>
+          <div className="grid grid-cols-1 xl:grid-cols-2 gap-5">
+            {/* Recommendations table */}
+            <div className="bg-gray-900 rounded-xl border border-gray-800 overflow-hidden">
+              <div className="p-4 border-b border-gray-800 flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Trophy className="w-4 h-4 text-yellow-400" />
+                  <span className="text-sm font-semibold text-gray-300">
+                    Recommendations for {result.battery_id} — SOH: {result.current_soh}%
+                  </span>
+                </div>
+                <span className="text-xs text-gray-500">{result.recommendations.length} configs</span>
               </div>
-              <span className="text-xs text-gray-500">{result.recommendations.length} configs</span>
-            </div>
-            <div className="overflow-x-auto">
+              <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
                   <tr className="text-gray-500 border-b border-gray-800 bg-gray-950/50">
@@ -361,9 +403,12 @@ export default function RecommendationPanel({ apiVersion }: Props) {
                         <tr
                           key={rec.rank}
                           className={`border-b border-gray-800/40 hover:bg-gray-800/40 transition-colors cursor-pointer ${
-                            rec.rank === 1 ? "bg-yellow-900/10" : ""
+                            rec.rank === selectedRank ? "bg-emerald-900/20" : rec.rank === 1 ? "bg-yellow-900/10" : ""
                           }`}
-                          onClick={() => setExpandedRow(expanded ? null : rec.rank)}
+                          onClick={() => {
+                            setExpandedRow(expanded ? null : rec.rank);
+                            setSelectedRank(rec.rank);
+                          }}
                         >
                           <td className="py-2.5 px-3">
                             <span className="flex items-center"><RankIcon rank={rec.rank} /></span>
@@ -421,6 +466,23 @@ export default function RecommendationPanel({ apiVersion }: Props) {
                   })}
                 </tbody>
               </table>
+              </div>
+            </div>
+
+            {/* Interactive 3D battery panel */}
+            <div className="bg-gray-900 rounded-xl border border-gray-800 overflow-hidden">
+              <div className="p-4 border-b border-gray-800 flex items-center justify-between">
+                <span className="text-sm font-semibold text-gray-300">Interactive Battery Impact</span>
+                <span className="text-xs text-emerald-400">Selected: #{selectedRec?.rank ?? 1}</span>
+              </div>
+              <div className="h-105">
+                <Battery3D currentSoh={currentSoh} projectedSoh={projectedSoh} />
+              </div>
+              <div className="p-4 border-t border-gray-800 text-xs text-gray-400 space-y-1">
+                <div>RUL: <span className="text-white font-semibold">{selectedRec?.predicted_rul.toFixed(0) ?? "-"} cycles</span></div>
+                <div>Gain: <span className="text-emerald-400 font-semibold">{selectedRec && selectedRec.rul_improvement > 0 ? "+" : ""}{selectedRec?.rul_improvement.toFixed(0) ?? "-"} cycles</span></div>
+                <div>Conditions: <span className="text-white">{selectedRec?.ambient_temperature}°C, {selectedRec?.discharge_current}A, {selectedRec?.cutoff_voltage}V</span></div>
+              </div>
             </div>
           </div>
         </div>

@@ -11,11 +11,10 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
-  ChevronRight, Download, Check, RefreshCw, AlertCircle, Layers, HardDrive,
+  ChevronRight, Check, RefreshCw, Layers,
 } from "lucide-react";
 import {
   fetchVersions,
-  loadVersion,
   VersionInfo,
   fetchVersionModels,
   loadVersionModel,
@@ -30,7 +29,6 @@ interface Props {
 export default function VersionSelector({ activeVersion, onSwitch }: Props) {
   const [open, setOpen] = useState(false);
   const [versions, setVersions] = useState<VersionInfo[]>([]);
-  const [busy, setBusy] = useState<string | null>(null);
   const [modelBusy, setModelBusy] = useState<string | null>(null);
   const [expandedVersion, setExpandedVersion] = useState<string | null>(null);
   const [versionModels, setVersionModels] = useState<Record<string, VersionModelInfo[]>>({});
@@ -49,19 +47,14 @@ export default function VersionSelector({ activeVersion, onSwitch }: Props) {
 
   // Poll while a download is in progress
   useEffect(() => {
-    const hasDownloading = versions.some((v) => v.status === "downloading");
     const hasModelDownloading = Object.values(versionModels)
       .some((rows) => rows.some((m) => m.status === "downloading"));
-    if (hasDownloading && !pollRef.current) {
-      pollRef.current = setInterval(refresh, 2500);
-    }
     if (hasModelDownloading && !pollRef.current) {
       pollRef.current = setInterval(refresh, 2500);
     }
-    if (!hasDownloading && !hasModelDownloading && pollRef.current) {
+    if (!hasModelDownloading && pollRef.current) {
       clearInterval(pollRef.current);
       pollRef.current = null;
-      setBusy(null);
       setModelBusy(null);
     }
     return () => {
@@ -90,25 +83,8 @@ export default function VersionSelector({ activeVersion, onSwitch }: Props) {
     return () => document.removeEventListener("mousedown", handler);
   }, [open]);
 
-  const handleDownloadOrLoad = async (version: string) => {
-    setBusy(version);
-    try {
-      const res = await loadVersion(version);
-      if (res.status === "ready") {
-        // Loaded instantly from disk — auto-switch
-        onSwitch(version as "v1" | "v2" | "v3");
-        setBusy(null);
-        setOpen(false);
-      }
-      refresh();
-    } catch {
-      setBusy(null);
-    }
-  };
-
   const handleSwitch = (version: string) => {
     onSwitch(version as "v1" | "v2" | "v3");
-    setOpen(false);
   };
 
   const handleExpandVersion = async (version: string) => {
@@ -139,25 +115,13 @@ export default function VersionSelector({ activeVersion, onSwitch }: Props) {
   };
 
   const statusForVersion = (v: VersionInfo) => {
-    const isDownloading = v.status === "downloading" || busy === v.id;
+    const isDownloading = v.status === "downloading";
     const isError = v.status === "error";
     const isLoaded = v.loaded && v.model_count > 0;
     const isOnDisk = v.status === "on_disk" || (v.on_disk && !isLoaded && !isDownloading && !isError);
     const isNotDownloaded = v.status === "not_downloaded" && !v.on_disk;
     return { isDownloading, isError, isLoaded, isOnDisk, isNotDownloaded };
   };
-
-  // Auto-switch when download completes
-  useEffect(() => {
-    if (busy) {
-      const v = versions.find((ver) => ver.id === busy);
-      if (v && v.status === "ready" && v.loaded && v.model_count > 0) {
-        onSwitch(busy as "v1" | "v2" | "v3");
-        setBusy(null);
-        setOpen(false);
-      }
-    }
-  }, [versions, busy, onSwitch]);
 
   const activeDisplay = versions.find((v) => v.id === activeVersion)?.display
     ?? `v${activeVersion[1]}.0`;
@@ -195,7 +159,7 @@ export default function VersionSelector({ activeVersion, onSwitch }: Props) {
           </div>
 
           {versions.map((v) => {
-            const { isDownloading, isError, isLoaded, isOnDisk, isNotDownloaded } = statusForVersion(v);
+            const { isDownloading, isLoaded } = statusForVersion(v);
             const isActiveVersion = v.id === activeVersion;
             const isExpanded = expandedVersion === v.id;
             const models = versionModels[v.id] ?? [];
@@ -207,7 +171,13 @@ export default function VersionSelector({ activeVersion, onSwitch }: Props) {
                     hover:bg-gray-800/60 transition-colors"
                 >
                   <div className="flex-1 min-w-0">
-                    <span className={`text-sm font-medium ${isActiveVersion ? "text-white" : "text-gray-200"}`}>{v.display}</span>
+                    <button
+                      onClick={() => handleSwitch(v.id)}
+                      className={`text-sm font-medium ${isActiveVersion ? "text-white" : "text-gray-200 hover:text-white"}`}
+                      title={`Switch to ${v.display}`}
+                    >
+                      {v.display}
+                    </button>
                     {isActiveVersion && (
                       <span className="ml-2 text-xs text-green-400 italic">Active Version</span>
                     )}
@@ -221,72 +191,20 @@ export default function VersionSelector({ activeVersion, onSwitch }: Props) {
                         {v.model_count} models
                       </span>
                     )}
-                    {isOnDisk && (
-                      <span className="ml-2 text-xs text-yellow-400">on disk</span>
-                    )}
-                    {isError && (
-                      <span className="ml-2 text-xs text-red-400">error</span>
-                    )}
                     {isDownloading && (
                       <span className="ml-2 text-xs text-yellow-400 animate-pulse">
                         downloading...
                       </span>
                     )}
-                    {isNotDownloaded && (
-                      <span className="ml-2 text-xs text-gray-600">not downloaded</span>
-                    )}
                   </div>
 
                   <div className="flex items-center gap-1 shrink-0 ml-2">
-                    {isLoaded && !isActiveVersion && (
-                      <button
-                        onClick={() => handleSwitch(v.id)}
-                        className="px-2.5 py-1 rounded text-xs font-medium
-                          bg-green-700 hover:bg-green-600 text-white transition-colors"
-                        title={`Switch to ${v.display}`}
-                      >
-                        Switch
-                      </button>
-                    )}
-
-                    {isOnDisk && !isDownloading && (
-                      <button
-                        onClick={() => handleDownloadOrLoad(v.id)}
-                        className="flex items-center gap-1 px-2.5 py-1 rounded text-xs font-medium
-                          bg-blue-700 hover:bg-blue-600 text-white transition-colors"
-                        title={`Load ${v.display} into memory`}
-                      >
-                        <HardDrive className="w-3 h-3" />
-                        Load
-                      </button>
-                    )}
-
-                    {isNotDownloaded && !isDownloading && !isError && (
-                      <button
-                        onClick={() => handleDownloadOrLoad(v.id)}
-                        className="flex items-center gap-1 px-2.5 py-1 rounded text-xs font-medium
-                          bg-gray-700 hover:bg-gray-600 text-gray-300 hover:text-white transition-colors"
-                        title={`Download ${v.display} from HF Hub`}
-                      >
-                        <Download className="w-3 h-3" />
-                        Download
-                      </button>
-                    )}
-
                     {isDownloading && (
                       <RefreshCw className="w-3.5 h-3.5 text-yellow-400 animate-spin" />
                     )}
 
-                    {isError && !isDownloading && (
-                      <button
-                        onClick={() => handleDownloadOrLoad(v.id)}
-                        className="flex items-center gap-1 px-2.5 py-1 rounded text-xs font-medium
-                          bg-gray-700 hover:bg-red-700 text-red-400 hover:text-white transition-colors"
-                        title="Retry download"
-                      >
-                        <AlertCircle className="w-3 h-3" />
-                        Retry
-                      </button>
+                    {isLoaded && (
+                      <Check className="w-3.5 h-3.5 text-green-400" />
                     )}
 
                     <button

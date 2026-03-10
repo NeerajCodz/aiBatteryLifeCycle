@@ -32,16 +32,13 @@ const mdComponents: React.ComponentProps<typeof ReactMarkdown>["components"] = {
 
   // ── Lists ─────────────────────────────────────────────────────────────
   ul: ({ children }) => (
-    <ul className="space-y-1.5 mb-4 pl-1">{children}</ul>
+    <ul className="list-disc list-inside space-y-1.5 mb-4 text-gray-300 text-sm">{children}</ul>
   ),
   ol: ({ children }) => (
     <ol className="list-decimal list-inside space-y-1.5 mb-4 text-gray-300 text-sm">{children}</ol>
   ),
   li: ({ children }) => (
-    <li className="flex items-start gap-2 text-gray-300 text-sm">
-      <span className="text-green-400 mt-1 shrink-0">•</span>
-      <span>{children}</span>
-    </li>
+    <li className="text-gray-300 text-sm">{children}</li>
   ),
 
   // ── Code ─────────────────────────────────────────────────────────────
@@ -189,20 +186,27 @@ export default function ResearchPaper() {
   const [usedFallback, setUsedFallback] = useState(false);
 
   useEffect(() => {
-    fetch("/research_paper.md")
-      .then((r) => {
-        if (!r.ok) throw new Error(`HTTP ${r.status}`);
-        return r.text();
-      })
-      .then((md) => {
-        setMarkdown(md);
-        setLoading(false);
-      })
-      .catch(() => {
-        setMarkdown(FALLBACK);
-        setUsedFallback(true);
-        setLoading(false);
-      });
+    const sources = ["/research_paper.md", "/docs/research_paper.md"];
+    const tryLoad = async () => {
+      for (const src of sources) {
+        try {
+          const r = await fetch(src);
+          if (!r.ok) continue;
+          const md = await r.text();
+          if (md && md.trim().length > 0) {
+            setMarkdown(md);
+            setLoading(false);
+            return;
+          }
+        } catch {
+          // Try next source
+        }
+      }
+      setMarkdown(FALLBACK);
+      setUsedFallback(true);
+      setLoading(false);
+    };
+    tryLoad();
   }, []);
 
   return (

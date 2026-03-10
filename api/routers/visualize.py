@@ -17,6 +17,7 @@ from fastapi.responses import FileResponse
 
 from api.model_registry import registry, classify_degradation, soh_to_color
 from api.schemas import BatteryVizData, DashboardData
+from scripts.download_models import ensure_metadata_first, download_metrics_bundle
 
 router = APIRouter(prefix="/api", tags=["visualization"])
 
@@ -223,9 +224,24 @@ def _battery_stats_for_version(version: str) -> dict:
 def _build_metrics_payload(version: str) -> dict:
     _ensure_version(version)
     root = _version_root(version)
+
+    # Ensure artifacts required by metrics exist locally for this version.
+    try:
+        ensure_metadata_first([version])
+        results_dir = root / "results"
+        figures_dir = root / "figures"
+        has_results = results_dir.exists() and any(results_dir.glob("*"))
+        has_figures = figures_dir.exists() and any(figures_dir.glob("*"))
+        if not has_results and not has_figures:
+            download_metrics_bundle(version)
+    except Exception:
+        # Keep endpoint resilient; payload will still be built from whatever exists.
+        pass
+
     results = root / "results"
     reports = root / "reports"
     models_meta = _safe_read_json(root / "models.json")
+    datamap = _safe_read_json(root / "datamap.json")
 
     unified = _safe_read_csv_first([results / "unified_results.csv"])
     classical_results = _safe_read_csv_first([
@@ -258,9 +274,48 @@ def _build_metrics_payload(version: str) -> dict:
     vae_lstm = _safe_read_json_first([results / "vae_lstm_results.json"])
     dg_itransformer = _safe_read_json_first([results / "dg_itransformer_results.json"])
 
+    # Fallback: build unified/classical-like rows directly from models.json when
+    # result CSVs are not yet downloaded for a version.
+    if not unified and isinstance(models_meta, dict):
+        model_rows = []
+        for name, info in (models_meta.get("models") or {}).items():
+            if not isinstance(info, dict):
+                continue
+            model_rows.append({
+                "model": name,
+                "family": info.get("family"),
+                "R2": info.get("r2"),
+                "MAE": info.get("mae"),
+                "RMSE": info.get("rmse"),
+                "MAPE": info.get("mape"),
+                "within_5pct": info.get("within_5pct"),
+                "f1_macro": info.get("f1_macro"),
+                "f1_weighted": info.get("f1_weighted"),
+            })
+        unified = model_rows
+        if not classical_results:
+            classical_results = [r for r in model_rows if (r.get("family") or "").startswith("classical")]
+
+    # Fallback summaries derived from unified rows
+    if not training_summary and unified:
+        valid_r2 = [r.get("R2") for r in unified if isinstance(r.get("R2"), (int, float))]
+        valid_w5 = [r.get("within_5pct") for r in unified if isinstance(r.get("within_5pct"), (int, float))]
+        best = max(unified, key=lambda r: r.get("R2") if isinstance(r.get("R2"), (int, float)) else -999)
+        training_summary = {
+            "best_model": best.get("model"),
+            "best_r2": best.get("R2"),
+            "best_within_5pct": best.get("within_5pct"),
+            "total_models": len(unified),
+            "mean_within_5pct": (sum(valid_w5) / len(valid_w5)) if valid_w5 else None,
+            "passed_models": sum(1 for v in valid_w5 if v >= 95.0),
+            "pass_rate_pct": (sum(1 for v in valid_w5 if v >= 95.0) / len(valid_w5) * 100.0) if valid_w5 else 0.0,
+            "mean_r2": (sum(valid_r2) / len(valid_r2)) if valid_r2 else None,
+        }
+
     return {
         "version": version,
         "models_meta": models_meta,
+        "datamap": datamap,
         "unified_results": unified,
         "classical_results": classical_results,
         "classical_soh": classical_soh,

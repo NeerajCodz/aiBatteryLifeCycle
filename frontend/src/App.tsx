@@ -82,7 +82,7 @@ export default function App() {
         {activeTab === "predict" && <PredictionForm apiVersion={apiVersion} />}
         {activeTab === "graphs" && <GraphPanel />}
         {activeTab === "recommend" && <RecommendationPanel apiVersion={apiVersion} />}
-        {activeTab === "metrics" && <MetricsPanel />}
+        {activeTab === "metrics" && <MetricsPanel apiVersion={apiVersion} />}
         {activeTab === "paper" && <ResearchPaper />}
       </main>
 

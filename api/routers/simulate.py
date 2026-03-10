@@ -315,17 +315,30 @@ async def simulate_batteries(req: SimulateRequest):
     eol_thr  = req.eol_threshold
     N        = req.steps
 
-    model_name = req.model_name or registry_v2.default_model or "best_ensemble"
+    requested_model = req.model_name or registry_v2.default_model or "best_ensemble"
 
-    # Deep sequence models need per-sample tensors and are not used in this endpoint.
-    # Classical + ensemble models use batch predict_array().
+    # Resolve to a batchable loaded model once (to avoid per-battery fallback spam).
+    # Priority: requested -> registry default -> first loaded classical model.
+    model_name = requested_model
+    if requested_model == "best_ensemble":
+        ensemble_components = registry_v2.model_meta.get("best_ensemble", {}).get("components", [])
+        if not ensemble_components:
+            model_name = registry_v2.default_model or ""
+
     family = registry_v2.model_meta.get(model_name, {}).get("family", "classical")
     is_deep = family in ("deep_pytorch", "deep_keras")
-    ml_batchable = (
-        req.use_ml
-        and not is_deep
-        and (model_name == "best_ensemble" or model_name in registry_v2.models)
-    )
+
+    if (model_name not in registry_v2.models) or is_deep:
+        fallback_loaded = [
+            name for name, meta in registry_v2.model_meta.items()
+            if name in registry_v2.models and meta.get("family") == "classical"
+        ]
+        if fallback_loaded:
+            model_name = fallback_loaded[0]
+            family = registry_v2.model_meta.get(model_name, {}).get("family", "classical")
+            is_deep = family in ("deep_pytorch", "deep_keras")
+
+    ml_batchable = req.use_ml and not is_deep and (model_name == "best_ensemble" or model_name in registry_v2.models)
 
     # Determine scaler note for logging (mirrors training decision exactly)
     if registry_v2.model_meta.get(model_name, {}).get("requires_scaling", False):
@@ -337,8 +350,8 @@ async def simulate_batteries(req: SimulateRequest):
 
     effective_model = "linear_fallback"
     log.info(
-        "simulate: %d batteries x %d steps | model=%s | batchable=%s | scaler=%s | unit=%s",
-        len(req.batteries), N, model_name, ml_batchable, scaler_note, time_unit,
+        "simulate: %d batteries x %d steps | requested=%s | effective=%s | batchable=%s | scaler=%s | unit=%s",
+        len(req.batteries), N, requested_model, model_name, ml_batchable, scaler_note, time_unit,
     )
 
     results: list[BatterySimResult] = []

@@ -99,7 +99,7 @@ def _load_version_meta(version: str) -> dict[str, Any]:
     """
     json_path = _ARTIFACTS / version / "models.json"
     if not json_path.exists():
-        log.warning("models.json not found for %s — catalog will be empty", version)
+        log.info("models.json not found for %s yet — catalog will refresh after metadata bootstrap", version)
         return {}
     try:
         with open(json_path, encoding="utf-8") as fh:
@@ -197,6 +197,34 @@ class ModelRegistry:
             return False
         return (self._artifacts / rel).exists()
 
+    def refresh_metadata(self) -> None:
+        """Reload models.json metadata and refresh catalog-derived settings."""
+        self._version_meta = _load_version_meta(self.version)
+        self._catalog = self._version_meta.get("models", {})
+
+        json_features = self._version_meta.get("feature_set")
+        if json_features:
+            self.feature_cols = list(json_features)
+        elif self.version == "v3":
+            self.feature_cols = list(V3_FEATURE_COLS)
+        else:
+            self.feature_cols = list(FEATURE_COLS_SCALAR)
+
+        ensemble_info = self._catalog.get("best_ensemble", {})
+        self._ensemble_components = ensemble_info.get("components", [])
+        self._ensemble_weights = {}
+        for cname in self._ensemble_components:
+            cinfo = self._catalog.get(cname, {})
+            self._ensemble_weights[cname] = cinfo.get("r2", 1.0)
+
+    def ensure_metadata_loaded(self) -> None:
+        """Refresh metadata lazily if catalog is empty and models.json exists now."""
+        if self._catalog:
+            return
+        json_path = _ARTIFACTS / self.version / "models.json"
+        if json_path.exists():
+            self.refresh_metadata()
+
     def load_model(self, model_name: str) -> bool:
         """Load one model (and ensemble dependencies when applicable).
 
@@ -222,6 +250,7 @@ class ModelRegistry:
         if only_models is None and self.models:
             log.debug("Registry already populated — skipping load_all()")
             return
+        self.ensure_metadata_loaded()
         self._detect_device()
         self._load_scaler()
         self.feature_cols = self._load_feature_cols()
@@ -939,6 +968,7 @@ class ModelRegistry:
 
     def list_models(self) -> list[dict[str, Any]]:
         """Return full model listing with versioning, metrics, and load status."""
+        self.ensure_metadata_loaded()
         all_metrics = self.get_metrics()
         # Registry version prefix: "v1" -> "1", "v2" -> "2", "v3" -> "3"
         reg_major = self.version.lstrip("v")
