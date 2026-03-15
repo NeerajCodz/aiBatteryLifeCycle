@@ -12,7 +12,7 @@ import {
   Trophy, Award, Medal, BarChart2, GitCompare, RefreshCcw, ChevronDown,
   ChevronUp, Info, AlertTriangle, CheckCircle2, Sliders,
 } from "lucide-react";
-import { fetchRecommendations, fetchModels, RecommendationResponse, ModelInfo } from "../api";
+import { fetchRecommendations, fetchModels, RecommendationResponse, ModelInfo, setApiVersion } from "../api";
 
 const CHART_COLORS = [
   "#22c55e", "#3b82f6", "#f59e0b", "#ef4444", "#8b5cf6",
@@ -51,6 +51,7 @@ function SliderInput({ label, value, min, max, step, unit, onChange }: {
 
 type Props = {
   apiVersion: "v1" | "v2" | "v3";
+  onApiVersionChange?: (v: "v1" | "v2" | "v3") => void;
 };
 
 function Battery3D({ currentSoh, projectedSoh }: { currentSoh: number; projectedSoh: number }) {
@@ -87,7 +88,8 @@ function Battery3D({ currentSoh, projectedSoh }: { currentSoh: number; projected
   );
 }
 
-export default function RecommendationPanel({ apiVersion }: Props) {
+export default function RecommendationPanel({ apiVersion, onApiVersionChange }: Props) {
+  const [selectedApiVersion, setSelectedApiVersion] = useState<"v1" | "v2" | "v3">(apiVersion);
   const [batteryId, setBatteryId] = useState("B0005");
   const [currentCycle, setCurrentCycle] = useState(100);
   const [currentSoh, setCurrentSoh] = useState(85);
@@ -102,12 +104,30 @@ export default function RecommendationPanel({ apiVersion }: Props) {
   const [selectedRank, setSelectedRank] = useState<number>(1);
   const [chartTab, setChartTab] = useState<"rul" | "params" | "radar">("rul");
 
+  useEffect(() => {
+    setSelectedApiVersion(apiVersion);
+  }, [apiVersion]);
+
   // Fetch available loaded models for selector
   useEffect(() => {
+    setApiVersion(selectedApiVersion);
     fetchModels()
-      .then((m) => setModels(m.filter((mo) => mo.loaded)))
+      .then((m) => {
+        const loaded = m.filter((mo) => mo.loaded);
+        setModels(loaded);
+        setSelectedModel((prev) => (prev && loaded.some((mo) => mo.name === prev) ? prev : null));
+      })
       .catch(() => setModels([]));
-  }, [apiVersion]);
+  }, [selectedApiVersion]);
+
+  const handleVersionChange = (v: "v1" | "v2" | "v3") => {
+    setSelectedApiVersion(v);
+    setApiVersion(v);
+    onApiVersionChange?.(v);
+    setSelectedModel(null);
+    setResult(null);
+    setError(null);
+  };
 
   const handleSubmit = async () => {
     setLoading(true);
@@ -208,22 +228,41 @@ export default function RecommendationPanel({ apiVersion }: Props) {
               </div>
             </div>
             {/* Model selector */}
-            <div>
-              <label className="block text-xs text-gray-400 mb-1">Model</label>
-              <select
-                value={selectedModel ?? ""}
-                onChange={(e) => setSelectedModel(e.target.value || null)}
-                className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white"
-              >
-                <option value="">Default (best available)</option>
-                {models.map((m) => (
-                  <option key={m.name} value={m.name}>
-                    {m.display_name ?? m.name}
-                    {m.r2 != null ? ` (R²=${m.r2.toFixed(3)})` : ""}
-                  </option>
-                ))}
-              </select>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs text-gray-400 mb-1">Version</label>
+                <select
+                  value={selectedApiVersion}
+                  onChange={(e) => handleVersionChange(e.target.value as "v1" | "v2" | "v3")}
+                  className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white"
+                >
+                  <option value="v1">v1</option>
+                  <option value="v2">v2</option>
+                  <option value="v3">v3</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs text-gray-400 mb-1">Model</label>
+                <select
+                  value={selectedModel ?? ""}
+                  onChange={(e) => setSelectedModel(e.target.value || null)}
+                  className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white"
+                >
+                  <option value="">Default (best available)</option>
+                  {models.map((m) => (
+                    <option key={m.name} value={m.name}>
+                      {m.display_name ?? m.name}
+                      {m.r2 != null ? ` (R²=${m.r2.toFixed(3)})` : ""}
+                    </option>
+                  ))}
+                </select>
+              </div>
             </div>
+            {models.length === 0 && (
+              <p className="text-xs text-amber-400">
+                No loaded models found for {selectedApiVersion}. Using default endpoint behavior.
+              </p>
+            )}
           </div>
           {/* Sliders */}
           <div className="space-y-4">

@@ -73,19 +73,16 @@ async def predict_batch_v3(req: BatchPredictRequest):
 # ── Recommendations (v3) ─────────────────────────────────────────────────────
 @router.post("/recommend", response_model=RecommendationResponse)
 async def recommend_v3(req: RecommendationRequest):
-    """Get operational recommendations using v3 models."""
+    """Get operational recommendations using v3 models.
+
+    Ranking is based on net RUL improvement versus a model-derived baseline,
+    with small guardrail penalties for clearly harsher operating conditions.
+    """
     import itertools
 
     temps = [4.0, 24.0, 43.0]
     currents = [0.5, 1.0, 2.0, 4.0]
     cutoffs = [2.0, 2.2, 2.5, 2.7]
-
-    EOL_THRESHOLD = 70.0
-    deg_rate = 0.2
-    if req.current_soh > EOL_THRESHOLD:
-        baseline_rul = (req.current_soh - EOL_THRESHOLD) / deg_rate
-    else:
-        baseline_rul = 0.0
 
     base_features = {
         "cycle_number": req.current_cycle,
@@ -102,22 +99,72 @@ async def recommend_v3(req: RecommendationRequest):
         "delta_capacity": -0.005,
     }
 
+    def guardrail_penalty(temp: float, current: float, cutoff: float) -> float:
+        """Penalty in cycle-units for stress-heavy operating points.
+
+        This keeps recommendations aligned with battery-care intent even when
+        model outputs are noisy for out-of-distribution combinations.
+        """
+        temp_penalty = max(0.0, temp - 30.0) * 3.0 + max(0.0, 12.0 - temp) * 1.5
+        current_penalty = max(0.0, current - 1.5) * 12.0
+        cutoff_penalty = max(0.0, 2.4 - cutoff) * 8.0
+        return temp_penalty + current_penalty + cutoff_penalty
+
+    baseline_features = {
+        **base_features,
+        "ambient_temperature": req.ambient_temperature,
+        "avg_current": 1.82,
+        "min_voltage": 2.61,
+        "voltage_range": 4.19 - 2.61,
+        "avg_temp": req.ambient_temperature + 8.0,
+    }
+    baseline_pred = registry_v3.predict(baseline_features, req.model_name)
+    baseline_rul = max(0.0, float(baseline_pred.get("rul_cycles", 0) or 0))
+    baseline_adjusted_rul = baseline_rul - guardrail_penalty(
+        req.ambient_temperature,
+        1.82,
+        2.61,
+    )
+
     candidates = []
     for t, c, v in itertools.product(temps, currents, cutoffs):
         feat = {**base_features, "ambient_temperature": t, "avg_current": c,
                 "min_voltage": v, "voltage_range": 4.19 - v,
                 "avg_temp": t + 8.0}
         result = registry_v3.predict(feat, req.model_name)
-        rul = result.get("rul_cycles", 0) or 0
-        candidates.append((rul, t, c, v, result["soh_pct"]))
+        rul = max(0.0, float(result.get("rul_cycles", 0) or 0))
+        adjusted_rul = rul - guardrail_penalty(t, c, v)
+        improvement = adjusted_rul - baseline_adjusted_rul
+        candidates.append({
+            "raw_rul": rul,
+            "adjusted_rul": adjusted_rul,
+            "improvement": improvement,
+            "temp": t,
+            "current": c,
+            "cutoff": v,
+        })
 
-    candidates.sort(reverse=True)
+    candidates.sort(
+        key=lambda x: (
+            x["improvement"] > 0,
+            x["improvement"],
+            x["adjusted_rul"],
+            -abs(x["temp"] - 24.0),
+            -x["current"],
+        ),
+        reverse=True,
+    )
     top = candidates[: req.top_k]
 
     recs = []
-    for rank, (rul, t, c, v, soh) in enumerate(top, 1):
-        improvement = rul - baseline_rul
+    for rank, rec in enumerate(top, 1):
+        rul = rec["raw_rul"]
+        t = rec["temp"]
+        c = rec["current"]
+        v = rec["cutoff"]
+        improvement = rec["improvement"]
         pct = (improvement / baseline_rul * 100) if baseline_rul > 0 else 0
+        impact = "improves" if improvement > 0 else "does not improve"
         recs.append(SingleRecommendation(
             rank=rank,
             ambient_temperature=t,
@@ -126,7 +173,10 @@ async def recommend_v3(req: RecommendationRequest):
             predicted_rul=rul,
             rul_improvement=improvement,
             rul_improvement_pct=round(pct, 1),
-            explanation=f"Operate at {t}°C, {c}A, cutoff {v}V for ~{rul:.0f} cycles RUL",
+            explanation=(
+                f"Operate at {t}°C, {c}A, cutoff {v}V for ~{rul:.0f} cycles RUL; "
+                f"this {impact} lifespan by {improvement:+.0f} cycles vs your baseline."
+            ),
         ))
 
     return RecommendationResponse(

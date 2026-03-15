@@ -81,7 +81,12 @@ export default function App() {
         {activeTab === "simulation" && <SimulationPanel />}
         {activeTab === "predict" && <PredictionForm apiVersion={apiVersion} />}
         {activeTab === "graphs" && <GraphPanel />}
-        {activeTab === "recommend" && <RecommendationPanel apiVersion={apiVersion} />}
+        {activeTab === "recommend" && (
+          <RecommendationPanel
+            apiVersion={apiVersion}
+            onApiVersionChange={handleVersionChange}
+          />
+        )}
         {activeTab === "metrics" && <MetricsPanel apiVersion={apiVersion} />}
         {activeTab === "paper" && <ResearchPaper />}
       </main>
