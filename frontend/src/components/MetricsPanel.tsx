@@ -11,7 +11,7 @@ import {
   Award, GitCompare, Search, FlaskConical, BrainCircuit,
   GanttChart, ImageIcon, X, Gauge, Info,
 } from "lucide-react";
-import { fetchMetrics } from "../api";
+import { fetchMetrics, fetchVersionFiguresManifest, type FigureManifestItem } from "../api";
 
 interface MetricsData {
   version?: string;
@@ -32,6 +32,7 @@ interface MetricsData {
   vae_lstm: any;
   dg_itransformer: any;
   figures: string[];
+  figures_manifest?: FigureManifestItem[];
   battery_stats: any;
 }
 
@@ -111,6 +112,7 @@ export default function MetricsPanel({ apiVersion = "v3" }: Props) {
   const [activeSection, setActiveSection] = useState<string>("overview");
   const [activeVersion, setActiveVersion] = useState<"v1" | "v2" | "v3">("v3");
   const [selectedFigure, setSelectedFigure] = useState<string | null>(null);
+  const [selectedFigureUrl, setSelectedFigureUrl] = useState<string | null>(null);
   const [figureSearch, setFigureSearch] = useState("");
   const [sortBy, setSortBy] = useState<MetricKey>("R2");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
@@ -127,9 +129,22 @@ export default function MetricsPanel({ apiVersion = "v3" }: Props) {
     setLoading(true);
     setError(null);
     fetchMetrics(activeVersion)
-      .then(setData)
+      .then(async (metricsData) => {
+        try {
+          const manifest = await fetchVersionFiguresManifest(activeVersion);
+          setData({ ...metricsData, figures_manifest: manifest });
+        } catch {
+          setData(metricsData);
+        }
+      })
       .catch((e) => setError(e.message))
       .finally(() => setLoading(false));
+  }, [activeVersion]);
+
+  useEffect(() => {
+    setSelectedFigure(null);
+    setSelectedFigureUrl(null);
+    setFigureSearch("");
   }, [activeVersion]);
 
   const sections = [
@@ -205,12 +220,30 @@ export default function MetricsPanel({ apiVersion = "v3" }: Props) {
     }));
   }, [unifiedSorted]);
 
+  const figuresManifest = useMemo<FigureManifestItem[]>(() => {
+    if (!data) return [];
+    if (Array.isArray(data.figures_manifest) && data.figures_manifest.length) {
+      return data.figures_manifest;
+    }
+    return (Array.isArray(data.figures) ? data.figures : []).map((f) => ({
+      name: f.replace(/\.[a-z0-9]+$/i, "").replace(/[_-]+/g, " ").trim() || f,
+      tags: [],
+      location: f,
+      url: `/api/${activeVersion}/figures/${encodeURIComponent(f)}`,
+    }));
+  }, [data, activeVersion]);
+
   const filteredFigures = useMemo(() => {
-    if (!data?.figures) return [];
-    if (!figureSearch) return data.figures;
+    if (!figuresManifest.length) return [];
+    if (!figureSearch) return figuresManifest;
     const q = figureSearch.toLowerCase();
-    return data.figures.filter((f) => f.toLowerCase().includes(q));
-  }, [data, figureSearch]);
+    return figuresManifest.filter((item) => {
+      const name = String(item.name ?? "").toLowerCase();
+      const location = String(item.location ?? "").toLowerCase();
+      const tags = Array.isArray(item.tags) ? item.tags.map((t) => String(t).toLowerCase()) : [];
+      return name.includes(q) || location.includes(q) || tags.some((t) => t.includes(q));
+    });
+  }, [figuresManifest, figureSearch]);
 
   const filteredModels = useMemo(() => {
     const base = unifiedSorted.length ? unifiedSorted : classicalV2Sorted;
@@ -284,6 +317,10 @@ export default function MetricsPanel({ apiVersion = "v3" }: Props) {
       ? (Object.entries(ds.feature_sets) as [string, string[]][])
       : [];
 
+  const allFigures = figuresManifest;
+  const hasAnyFigures = allFigures.length > 0;
+  const hasSearchQuery = figureSearch.trim().length > 0;
+
   const sohStats = bs ? {
     min: bs.min_soh,
     avg: bs.avg_soh,
@@ -322,15 +359,31 @@ export default function MetricsPanel({ apiVersion = "v3" }: Props) {
 
       {/* Figure lightbox */}
       {selectedFigure && (
-        <div className="fixed inset-0 z-100 flex items-center justify-center bg-black/80 backdrop-blur-sm" onClick={() => setSelectedFigure(null)}>
+        <div
+          className="fixed inset-0 z-100 flex items-center justify-center bg-black/80 backdrop-blur-sm"
+          onClick={() => {
+            setSelectedFigure(null);
+            setSelectedFigureUrl(null);
+          }}
+        >
           <div className="max-w-5xl max-h-[90vh] overflow-auto" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-2">
               <span className="text-sm text-gray-300">{selectedFigure}</span>
-              <button onClick={() => setSelectedFigure(null)} className="text-gray-400 hover:text-white">
+              <button
+                onClick={() => {
+                  setSelectedFigure(null);
+                  setSelectedFigureUrl(null);
+                }}
+                className="text-gray-400 hover:text-white"
+              >
                 <X className="w-5 h-5" />
               </button>
             </div>
-            <img src={`/api/${activeVersion}/figures/${selectedFigure}`} alt={selectedFigure} className="rounded-lg max-w-full" />
+            <img
+              src={selectedFigureUrl ?? `/api/${activeVersion}/figures/${selectedFigure}`}
+              alt={selectedFigure}
+              className="rounded-lg max-w-full"
+            />
           </div>
         </div>
       )}
@@ -965,20 +1018,26 @@ export default function MetricsPanel({ apiVersion = "v3" }: Props) {
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {filteredFigures.map((fig) => (
               <div
-                key={fig}
+                key={`${fig.name}|${fig.location}`}
                 className="bg-gray-900 rounded-xl border border-gray-800 overflow-hidden cursor-pointer hover:border-gray-600 transition-colors group"
-                onClick={() => setSelectedFigure(fig)}
+                onClick={() => {
+                  setSelectedFigure(fig.name);
+                  setSelectedFigureUrl(fig.url);
+                }}
               >
                 <div className="aspect-4/3 bg-gray-800 overflow-hidden">
                   <img
-                    src={`/api/${activeVersion}/figures/${fig}`}
-                    alt={fig}
+                    src={fig.url}
+                    alt={fig.name}
                     className="w-full h-full object-contain group-hover:scale-105 transition-transform"
                     loading="lazy"
                   />
                 </div>
                 <div className="p-3">
-                  <div className="text-sm text-gray-300 truncate">{fig.replace(/_/g, " ").replace(".png", "")}</div>
+                  <div className="text-sm text-gray-300 truncate">{fig.name}</div>
+                  {Array.isArray(fig.tags) && fig.tags.length > 0 && (
+                    <div className="mt-1 text-[11px] text-gray-500 truncate">#{fig.tags.slice(0, 4).join(" #")}</div>
+                  )}
                 </div>
               </div>
             ))}
@@ -987,7 +1046,14 @@ export default function MetricsPanel({ apiVersion = "v3" }: Props) {
           {filteredFigures.length === 0 && (
             <div className="text-center py-12 text-gray-500">
               <ImageIcon className="w-8 h-8 mx-auto mb-2 opacity-40" />
-              <p className="text-sm">No figures found</p>
+              <p className="text-sm">
+                {hasAnyFigures && hasSearchQuery ? "No figures match your search" : "No figures found"}
+              </p>
+              {!hasAnyFigures && (
+                <p className="text-xs text-gray-600 mt-2">
+                  Try another metrics version, or ensure figure metadata is available.
+                </p>
+              )}
             </div>
           )}
         </>

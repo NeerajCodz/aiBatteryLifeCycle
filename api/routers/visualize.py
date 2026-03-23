@@ -11,6 +11,8 @@ import json
 import os
 from io import StringIO
 from pathlib import Path
+from typing import Any
+from urllib.parse import quote, urlparse
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
@@ -30,6 +32,10 @@ _DATASET = _PROJECT / "cleaned_dataset"
 _HF_RAW_BASE = os.getenv(
     "HF_ARTIFACTS_RAW_BASE",
     "https://huggingface.co/NeerajCodz/aiBatteryLifeCycle/resolve/main",
+)
+_HF_TREE_API_BASE = os.getenv(
+    "HF_ARTIFACTS_TREE_API_BASE",
+    "https://huggingface.co/api/models/NeerajCodz/aiBatteryLifeCycle/tree/main",
 )
 
 _SUPPORTED_VERSIONS = {"v1", "v2", "v3"}
@@ -156,6 +162,12 @@ def _hf_version_url(version: str, rel_path: str) -> str:
     return _hf_url(f"{version}/{rel_path.lstrip('/')}")
 
 
+def _hf_tree_api_url(rel_path: str = "") -> str:
+    base = _HF_TREE_API_BASE.rstrip("/")
+    rel = rel_path.lstrip("/")
+    return f"{base}/{rel}" if rel else base
+
+
 def _read_remote_text(url: str) -> str | None:
     req = Request(url, headers={"User-Agent": "aiBatteryLifecycle/metrics"})
     try:
@@ -164,6 +176,232 @@ def _read_remote_text(url: str) -> str | None:
             return resp.read().decode(charset, errors="replace")
     except (HTTPError, URLError, TimeoutError, ValueError):
         return None
+
+
+def _read_remote_json(url: str) -> dict:
+    text = _read_remote_text(url)
+    if not text:
+        return {}
+    try:
+        data = json.loads(text)
+        return data if isinstance(data, dict) else {}
+    except Exception:
+        return {}
+
+
+def _extract_figure_names_from_datamap(datamap: dict) -> list[str]:
+    files = datamap.get("files", []) if isinstance(datamap, dict) else []
+    names: list[str] = []
+    for item in files:
+        if not isinstance(item, dict):
+            continue
+        rel = str(item.get("path", ""))
+        if not rel.startswith("figures/"):
+            continue
+        name = Path(rel).name
+        if Path(name).suffix.lower() in (".png", ".svg", ".jpg", ".jpeg", ".webp"):
+            names.append(name)
+    return sorted(set(names))
+
+
+def _list_tree_api_figures(version: str) -> list[str]:
+    text = _read_remote_text(_hf_tree_api_url(f"{version}/figures"))
+    if not text:
+        return []
+    try:
+        data = json.loads(text)
+    except Exception:
+        return []
+    if not isinstance(data, list):
+        return []
+    names: list[str] = []
+    for item in data:
+        if not isinstance(item, dict):
+            continue
+        rel = str(item.get("path") or item.get("name") or "")
+        name = Path(rel).name
+        if Path(name).suffix.lower() in (".png", ".svg", ".jpg", ".jpeg", ".webp"):
+            names.append(name)
+    return sorted(set(names))
+
+
+def _safe_read_json_any(path: Path, remote_url: str | None = None) -> Any:
+    """Read JSON (dict/list) from disk, then optional remote fallback."""
+    if path.exists():
+        try:
+            return json.loads(path.read_text(encoding="utf-8"))
+        except Exception:
+            pass
+    if remote_url:
+        text = _read_remote_text(remote_url)
+        if text:
+            try:
+                return json.loads(text)
+            except Exception:
+                pass
+    return None
+
+
+def _looks_like_url(value: str) -> bool:
+    return value.startswith("http://") or value.startswith("https://")
+
+
+def _location_filename(location: str) -> str:
+    loc = location.strip()
+    if not loc:
+        return ""
+    if _looks_like_url(loc):
+        return Path(urlparse(loc).path).name
+    if loc.startswith("figures/"):
+        return Path(loc).name
+    return Path(loc).name
+
+
+def _prettify_figure_name(raw: str) -> str:
+    if not raw:
+        return ""
+    base = Path(raw).stem if Path(raw).suffix else raw
+    return base.replace("_", " ").replace("-", " ").strip()
+
+
+def _tags_from_label(label: str) -> list[str]:
+    base = Path(label).stem if Path(label).suffix else label
+    raw_parts = (
+        base.replace("-", "_")
+        .replace(" ", "_")
+        .replace(".", "_")
+        .lower()
+        .split("_")
+    )
+    stop = {"and", "the", "all", "by", "vs", "with", "for"}
+    out: list[str] = []
+    seen: set[str] = set()
+    for part in raw_parts:
+        token = part.strip()
+        if len(token) < 2 or token in stop or token in seen:
+            continue
+        seen.add(token)
+        out.append(token)
+    return out
+
+
+def _location_to_serve_url(version: str, location: str) -> str:
+    loc = location.strip()
+    if not loc:
+        return ""
+    if _looks_like_url(loc) or loc.startswith("/"):
+        return loc
+    filename = _location_filename(loc)
+    if not filename:
+        return ""
+    return f"/api/{version}/figures/{quote(filename)}"
+
+
+def _normalize_figure_manifest_item(version: str, raw: Any) -> dict[str, Any] | None:
+    if isinstance(raw, str):
+        loc = raw.strip()
+        if not loc:
+            return None
+        pretty = _prettify_figure_name(_location_filename(loc) or loc)
+        return {
+            "name": pretty or loc,
+            "tags": _tags_from_label(pretty or loc),
+            "location": loc,
+            "url": _location_to_serve_url(version, loc),
+        }
+
+    if not isinstance(raw, dict):
+        return None
+
+    location = str(
+        raw.get("location")
+        or raw.get("url")
+        or raw.get("path")
+        or raw.get("file")
+        or raw.get("src")
+        or ""
+    ).strip()
+    name = str(raw.get("name") or "").strip()
+
+    if not location and name and Path(name).suffix:
+        location = name
+    if not location:
+        return None
+
+    if not name:
+        name = _prettify_figure_name(_location_filename(location) or location)
+    if not name:
+        name = location
+
+    raw_tags = raw.get("tags", [])
+    if isinstance(raw_tags, str):
+        tags = [t.strip().lower() for t in raw_tags.split(",") if t.strip()]
+    elif isinstance(raw_tags, list):
+        tags = [str(t).strip().lower() for t in raw_tags if str(t).strip()]
+    else:
+        tags = []
+    if not tags:
+        tags = _tags_from_label(name)
+
+    # De-duplicate while preserving order
+    deduped_tags: list[str] = []
+    seen_tags: set[str] = set()
+    for t in tags:
+        if t in seen_tags:
+            continue
+        seen_tags.add(t)
+        deduped_tags.append(t)
+
+    return {
+        "name": name,
+        "tags": deduped_tags,
+        "location": location,
+        "url": _location_to_serve_url(version, location),
+    }
+
+
+def _version_figures_manifest(version: str) -> list[dict[str, Any]]:
+    payload = _safe_read_json_any(
+        _version_root(version) / "figures.json",
+        _hf_version_url(version, "figures.json"),
+    )
+
+    if isinstance(payload, list):
+        raw_items = payload
+    elif isinstance(payload, dict):
+        figures = payload.get("figures")
+        items = payload.get("items")
+        if isinstance(figures, list):
+            raw_items = figures
+        elif isinstance(items, list):
+            raw_items = items
+        else:
+            raw_items = []
+    else:
+        raw_items = []
+
+    manifest: list[dict[str, Any]] = []
+    seen: set[tuple[str, str]] = set()
+    for item in raw_items:
+        normalized = _normalize_figure_manifest_item(version, item)
+        if not normalized:
+            continue
+        key = (normalized["name"].lower(), normalized["location"])
+        if key in seen:
+            continue
+        seen.add(key)
+        manifest.append(normalized)
+
+    if manifest:
+        return manifest
+
+    # Fallback manifest generated from discovered figure filenames.
+    fallback: list[dict[str, Any]] = []
+    for filename in _version_figures(version):
+        normalized = _normalize_figure_manifest_item(version, filename)
+        if normalized:
+            fallback.append(normalized)
+    return fallback
 
 
 def _safe_read_csv(path: Path, remote_url: str | None = None) -> list[dict]:
@@ -254,22 +492,20 @@ def _version_figures(version: str) -> list[str]:
     if local:
         return local
 
-    datamap = _safe_read_json(
-        _version_root(version) / "datamap.json",
-        _hf_version_url(version, "datamap.json"),
-    )
-    files = datamap.get("files", []) if isinstance(datamap, dict) else []
-    remote_figs = []
-    for item in files:
-        if not isinstance(item, dict):
-            continue
-        rel = str(item.get("path", ""))
-        if not rel.startswith("figures/"):
-            continue
-        name = Path(rel).name
-        if Path(name).suffix.lower() in (".png", ".svg", ".jpg", ".jpeg", ".webp"):
-            remote_figs.append(name)
-    return sorted(set(remote_figs))
+    # Local datamap may only list downloaded subsets on Spaces.
+    # If it does not contain figure entries, explicitly query HF raw datamap.
+    local_datamap = _safe_read_json(_version_root(version) / "datamap.json", None)
+    local_map_figs = _extract_figure_names_from_datamap(local_datamap)
+    if local_map_figs:
+        return local_map_figs
+
+    remote_datamap = _read_remote_json(_hf_version_url(version, "datamap.json"))
+    remote_map_figs = _extract_figure_names_from_datamap(remote_datamap)
+    if remote_map_figs:
+        return remote_map_figs
+
+    # Last-resort fallback: Hugging Face tree API listing for /<version>/figures
+    return _list_tree_api_figures(version)
 
 
 def _battery_stats_for_version(version: str) -> dict:
@@ -384,6 +620,17 @@ def _build_metrics_payload(version: str) -> dict:
             "mean_r2": (sum(valid_r2) / len(valid_r2)) if valid_r2 else None,
         }
 
+    figures_manifest = _version_figures_manifest(version)
+    figures: list[str] = []
+    seen_names: set[str] = set()
+    for item in figures_manifest:
+        loc = str(item.get("location", ""))
+        name = _location_filename(loc) or str(item.get("name", "")).strip()
+        if not name or name in seen_names:
+            continue
+        seen_names.add(name)
+        figures.append(name)
+
     return {
         "version": version,
         "models_meta": models_meta,
@@ -402,7 +649,8 @@ def _build_metrics_payload(version: str) -> dict:
         "intra_battery": intra_battery,
         "vae_lstm": vae_lstm,
         "dg_itransformer": dg_itransformer,
-        "figures": _version_figures(version),
+        "figures": figures,
+        "figures_manifest": figures_manifest,
         "battery_stats": _battery_stats_for_version(version),
         "dataset_info": dataset_info,
     }
@@ -423,7 +671,24 @@ async def get_metrics_for_version(version: str):
 @router.get("/{version}/figures")
 async def list_version_figures(version: str):
     _ensure_version(version)
-    return _version_figures(version)
+    manifest = _version_figures_manifest(version)
+    names: list[str] = []
+    seen: set[str] = set()
+    for item in manifest:
+        loc = str(item.get("location", ""))
+        name = _location_filename(loc) or str(item.get("name", "")).strip()
+        if not name or name in seen:
+            continue
+        seen.add(name)
+        names.append(name)
+    return names
+
+
+@router.get("/{version}/figures.json")
+async def get_version_figures_manifest(version: str):
+    """Return versioned figure manifest (name/tags/location/url)."""
+    _ensure_version(version)
+    return _version_figures_manifest(version)
 
 
 @router.get("/{version}/figures/{filename}")

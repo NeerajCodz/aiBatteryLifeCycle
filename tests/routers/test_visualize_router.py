@@ -45,6 +45,34 @@ def test_version_figures_from_datamap_remote(monkeypatch, tmp_path):
     assert figs == ["a.png", "b.svg"]
 
 
+def test_version_figures_prefers_remote_when_local_datamap_has_no_figures(monkeypatch, tmp_path):
+    monkeypatch.setattr(visualize, "_ARTIFACTS", tmp_path)
+    v3 = tmp_path / "v3"
+    v3.mkdir(parents=True)
+    (v3 / "datamap.json").write_text(json.dumps({"files": [{"path": "results/x.csv"}]}), encoding="utf-8")
+
+    def _remote_text(url: str):
+        if url.endswith("/v3/datamap.json"):
+            return json.dumps({"files": [{"path": "figures/remote_a.png"}]})
+        return None
+
+    monkeypatch.setattr(visualize, "_read_remote_text", _remote_text)
+    figs = visualize._version_figures("v3")
+    assert figs == ["remote_a.png"]
+
+
+def test_version_figures_fallback_to_tree_api(monkeypatch, tmp_path):
+    monkeypatch.setattr(visualize, "_ARTIFACTS", tmp_path)
+    monkeypatch.setattr(visualize, "_read_remote_text", lambda _url: json.dumps([
+        {"path": "v3/figures/tree_a.png"},
+        {"path": "v3/figures/tree_b.svg"},
+    ]))
+    monkeypatch.setattr(visualize, "_hf_tree_api_url", lambda rel="": f"https://hf/api/{rel}")
+    monkeypatch.setattr(visualize, "_safe_read_json", lambda *_args, **_kwargs: {})
+    figs = visualize._version_figures("v3")
+    assert figs == ["tree_a.png", "tree_b.svg"]
+
+
 def test_build_metrics_payload_from_local_files(monkeypatch, tmp_path):
     monkeypatch.setattr(visualize, "_ARTIFACTS", tmp_path)
     monkeypatch.setattr(visualize, "_read_remote_text", lambda _url: None)
@@ -95,6 +123,53 @@ def test_get_version_figure_not_found(monkeypatch, tmp_path, run_async):
 def test_ensure_version_validation():
     with pytest.raises(HTTPException):
         visualize._ensure_version("v9")
+
+
+def test_figures_manifest_from_figures_json(monkeypatch, tmp_path):
+    monkeypatch.setattr(visualize, "_ARTIFACTS", tmp_path)
+    v3 = tmp_path / "v3"
+    v3.mkdir(parents=True)
+    (v3 / "figures.json").write_text(
+        json.dumps(
+            {
+                "figures": [
+                    {"name": "SOH Trend", "tags": ["soh", "trend"], "location": "soh_degradation_trends.png"},
+                    {"name": "Remote", "tags": "remote,external", "location": "https://cdn.example/img.png"},
+                    "capacity_and_rul.png",
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+    out = visualize._version_figures_manifest("v3")
+    assert len(out) == 3
+    assert out[0]["name"] == "SOH Trend"
+    assert out[0]["url"] == "/api/v3/figures/soh_degradation_trends.png"
+    assert out[1]["url"] == "https://cdn.example/img.png"
+    assert out[2]["location"] == "capacity_and_rul.png"
+
+
+def test_figures_manifest_fallback_to_discovered_figures(monkeypatch, tmp_path):
+    monkeypatch.setattr(visualize, "_ARTIFACTS", tmp_path)
+    monkeypatch.setattr(visualize, "_version_figures", lambda _v: ["a.png", "b.svg"])
+    out = visualize._version_figures_manifest("v3")
+    assert [x["location"] for x in out] == ["a.png", "b.svg"]
+
+
+def test_list_version_figures_and_figures_json_endpoint(monkeypatch, tmp_path, run_async):
+    monkeypatch.setattr(visualize, "_ARTIFACTS", tmp_path)
+    monkeypatch.setattr(
+        visualize,
+        "_version_figures_manifest",
+        lambda _v: [
+            {"name": "A", "tags": ["one"], "location": "a.png", "url": "/api/v3/figures/a.png"},
+            {"name": "B", "tags": ["two"], "location": "https://cdn/x.png", "url": "https://cdn/x.png"},
+        ],
+    )
+    names = run_async(visualize.list_version_figures("v3"))
+    assert names == ["a.png", "x.png"]
+    manifest = run_async(visualize.get_version_figures_manifest("v3"))
+    assert manifest[0]["name"] == "A"
 
 
 def test_dashboard_and_battery_endpoints(monkeypatch, tmp_path, run_async):

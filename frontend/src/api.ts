@@ -66,6 +66,13 @@ export interface ModelVersionGroups {
   default_model: string | null;
 }
 
+export interface FigureManifestItem {
+  name: string;
+  tags: string[];
+  location: string;
+  url: string;
+}
+
 // ── Version management ───────────────────────────────────────────────────────
 export interface VersionInfo {
   id: string;            // "v1" | "v2" | "v3"
@@ -185,6 +192,10 @@ export const fetchMetrics = (version: "v1" | "v2" | "v3" = "v3") =>
 /** Versioned figures list from artifacts/{version}/figures. */
 export const fetchVersionFigures = (version: "v1" | "v2" | "v3") =>
   baseApi.get<string[]>(`/${version}/figures`).then((r) => r.data);
+
+/** Versioned figures manifest from artifacts/{version}/figures.json. */
+export const fetchVersionFiguresManifest = (version: "v1" | "v2" | "v3") =>
+  baseApi.get<FigureManifestItem[]>(`/${version}/figures.json`).then((r) => r.data);
 
 // ── Simulation types ────────────────────────────────────────────────────────
 export interface BatterySimConfig {
