@@ -151,6 +151,7 @@ def test_figures_manifest_from_figures_json(monkeypatch, tmp_path):
 
 def test_figures_manifest_fallback_to_discovered_figures(monkeypatch, tmp_path):
     monkeypatch.setattr(visualize, "_ARTIFACTS", tmp_path)
+    monkeypatch.setattr(visualize, "_read_remote_text", lambda _url: None)
     monkeypatch.setattr(visualize, "_version_figures", lambda _v: ["a.png", "b.svg"])
     out = visualize._version_figures_manifest("v3")
     assert [x["location"] for x in out] == ["a.png", "b.svg"]
