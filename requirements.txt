@@ -41,6 +41,7 @@ jupyter>=1.0
 ipykernel>=6.29
 tqdm>=4.66,<5.0
 joblib>=1.3,<2.0
+pytest>=9.0,<10.0
 
 # ── Dimensionality Reduction (for latent-space viz) ─────────────────────────
 umap-learn>=0.5,<1.0

@@ -182,7 +182,7 @@ export default function MetricsPanel({ apiVersion = "v3" }: Props) {
     if (!unifiedSorted.length) return [];
     const families: Record<string, number> = {};
     unifiedSorted.forEach((m) => {
-      const name = m.model.toLowerCase();
+      const name = String(m?.model ?? "").toLowerCase();
       let family = "Other";
       if (name.includes("lstm") || name.includes("gru")) family = "RNN/LSTM";
       else if (name.includes("transformer") || name.includes("batterygpt") || name.includes("tft")) family = "Transformer";
@@ -215,7 +215,7 @@ export default function MetricsPanel({ apiVersion = "v3" }: Props) {
   const filteredModels = useMemo(() => {
     const base = unifiedSorted.length ? unifiedSorted : classicalV2Sorted;
     const rows = familyFilter !== "all"
-      ? base.filter((r) => (r.family ?? r.model_family ?? (r.model ?? "")).toLowerCase().includes(familyFilter))
+      ? base.filter((r) => String(r.family ?? r.model_family ?? (r.model ?? "")).toLowerCase().includes(familyFilter))
       : base;
     return [...rows].sort((a, b) => {
       const av = getMetricVal(a, sortBy);
@@ -227,7 +227,7 @@ export default function MetricsPanel({ apiVersion = "v3" }: Props) {
 
   const families = useMemo(() => {
     const base = unifiedSorted.length ? unifiedSorted : classicalV2Sorted;
-    const set = new Set(base.map((r) => (r.family ?? r.model_family ?? (r.model ?? "other")).toLowerCase()));
+    const set = new Set(base.map((r) => String(r.family ?? r.model_family ?? (r.model ?? "other")).toLowerCase()));
     return ["all", ...Array.from(set)];
   }, [unifiedSorted, classicalV2Sorted]);
 
@@ -267,23 +267,22 @@ export default function MetricsPanel({ apiVersion = "v3" }: Props) {
   const dsSummary = ds?.summary;
   const dsValidationChecks = ds?.validation?.checks ?? {};
 
-  const dsTempGroups = useMemo(() => {
-    if (!dsSummary?.temperature_groups || typeof dsSummary.temperature_groups !== "object") return [];
-    return Object.keys(dsSummary.temperature_groups)
-      .map((k) => Number(k))
-      .filter((n) => Number.isFinite(n))
-      .sort((a, b) => a - b);
-  }, [dsSummary]);
+  const dsTempGroups = dsSummary?.temperature_groups && typeof dsSummary.temperature_groups === "object"
+    ? Object.keys(dsSummary.temperature_groups)
+        .map((k) => Number(k))
+        .filter((n) => Number.isFinite(n))
+        .sort((a, b) => a - b)
+    : [];
 
-  const dsCycleTypeRows = useMemo(() => {
-    if (!dsSummary?.cycle_types || typeof dsSummary.cycle_types !== "object") return [];
-    return Object.entries(dsSummary.cycle_types).map(([name, value]) => ({ name, value }));
-  }, [dsSummary]);
+  const dsCycleTypeRows =
+    dsSummary?.cycle_types && typeof dsSummary.cycle_types === "object"
+      ? Object.entries(dsSummary.cycle_types).map(([name, value]) => ({ name, value }))
+      : [];
 
-  const dsFeatureRows = useMemo(() => {
-    if (!ds?.feature_sets || typeof ds.feature_sets !== "object") return [];
-    return Object.entries(ds.feature_sets) as [string, string[]][];
-  }, [ds]);
+  const dsFeatureRows =
+    ds?.feature_sets && typeof ds.feature_sets === "object"
+      ? (Object.entries(ds.feature_sets) as [string, string[]][])
+      : [];
 
   const sohStats = bs ? {
     min: bs.min_soh,

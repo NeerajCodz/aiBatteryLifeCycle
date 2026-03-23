@@ -8,16 +8,18 @@ consumed by the React frontend.
 from __future__ import annotations
 
 import json
+import os
+from io import StringIO
 from pathlib import Path
+from urllib.error import HTTPError, URLError
+from urllib.request import Request, urlopen
 
-import numpy as np
 import pandas as pd
 from fastapi import APIRouter, HTTPException
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, RedirectResponse
 
 from api.model_registry import registry, classify_degradation, soh_to_color
 from api.schemas import BatteryVizData, DashboardData
-from scripts.download_models import ensure_metadata_first, download_metrics_bundle
 
 router = APIRouter(prefix="/api", tags=["visualization"])
 
@@ -25,6 +27,10 @@ _PROJECT = Path(__file__).resolve().parents[2]
 _ARTIFACTS = _PROJECT / "artifacts"
 _FIGURES = _ARTIFACTS / "figures"
 _DATASET = _PROJECT / "cleaned_dataset"
+_HF_RAW_BASE = os.getenv(
+    "HF_ARTIFACTS_RAW_BASE",
+    "https://huggingface.co/NeerajCodz/aiBatteryLifeCycle/resolve/main",
+)
 
 _SUPPORTED_VERSIONS = {"v1", "v2", "v3"}
 
@@ -142,38 +148,87 @@ async def list_batteries():
 
 
 # ── Comprehensive metrics endpoint ───────────────────────────────────────────
-def _safe_read_csv(path: Path) -> list[dict]:
-    """Read a CSV file into a list of dicts, replacing NaN with None."""
-    if not path.exists():
+def _hf_url(rel_path: str) -> str:
+    return f"{_HF_RAW_BASE.rstrip('/')}/{rel_path.lstrip('/')}"
+
+
+def _hf_version_url(version: str, rel_path: str) -> str:
+    return _hf_url(f"{version}/{rel_path.lstrip('/')}")
+
+
+def _read_remote_text(url: str) -> str | None:
+    req = Request(url, headers={"User-Agent": "aiBatteryLifecycle/metrics"})
+    try:
+        with urlopen(req, timeout=15) as resp:
+            charset = resp.headers.get_content_charset() or "utf-8"
+            return resp.read().decode(charset, errors="replace")
+    except (HTTPError, URLError, TimeoutError, ValueError):
+        return None
+
+
+def _safe_read_csv(path: Path, remote_url: str | None = None) -> list[dict]:
+    """Read CSV from disk, then fallback to HF raw URL."""
+    try:
+        if path.exists():
+            df = pd.read_csv(path)
+            return json.loads(df.to_json(orient="records"))
+    except Exception:
+        pass
+    if not remote_url:
         return []
-    df = pd.read_csv(path)
-    return json.loads(df.to_json(orient="records"))
+    text = _read_remote_text(remote_url)
+    if text is None:
+        return []
+    try:
+        df = pd.read_csv(StringIO(text))
+        return json.loads(df.to_json(orient="records"))
+    except Exception:
+        return []
 
 
-def _safe_read_json(path: Path) -> dict:
-    """Read a JSON file, returning empty dict on failure."""
-    if not path.exists():
+def _safe_read_json(path: Path, remote_url: str | None = None) -> dict:
+    """Read JSON from disk, then fallback to HF raw URL."""
+    if path.exists():
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+            return data if isinstance(data, dict) else {}
+        except Exception:
+            pass
+    if not remote_url:
         return {}
-    with open(path) as f:
-        return json.load(f)
+    text = _read_remote_text(remote_url)
+    if not text:
+        return {}
+    try:
+        data = json.loads(text)
+        return data if isinstance(data, dict) else {}
+    except Exception:
+        return {}
 
 
 def _load_dataset_info() -> dict:
     """Load global dataset metadata used by Dataset/Validation tabs."""
-    return _safe_read_json(_ARTIFACTS / "dataset.json")
+    return _safe_read_json(
+        _ARTIFACTS / "dataset.json",
+        _hf_url("dataset.json"),
+    )
 
 
-def _safe_read_csv_first(paths: list[Path]) -> list[dict]:
-    for path in paths:
-        if path.exists():
-            return _safe_read_csv(path)
+def _safe_read_csv_first(version: str, rel_paths: list[str]) -> list[dict]:
+    for rel in rel_paths:
+        path = _version_root(version) / rel
+        rows = _safe_read_csv(path, _hf_version_url(version, rel))
+        if rows:
+            return rows
     return []
 
 
-def _safe_read_json_first(paths: list[Path]) -> dict:
-    for path in paths:
-        if path.exists():
-            return _safe_read_json(path)
+def _safe_read_json_first(version: str, rel_paths: list[str]) -> dict:
+    for rel in rel_paths:
+        path = _version_root(version) / rel
+        data = _safe_read_json(path, _hf_version_url(version, rel))
+        if data:
+            return data
     return {}
 
 
@@ -189,8 +244,32 @@ def _ensure_version(version: str) -> None:
 def _version_figures(version: str) -> list[str]:
     fig_dir = _version_root(version) / "figures"
     if not fig_dir.exists():
-        return []
-    return sorted([f.name for f in fig_dir.iterdir() if f.is_file() and f.suffix.lower() in (".png", ".svg", ".jpg", ".jpeg", ".webp")])
+        local = []
+    else:
+        local = sorted([
+            f.name
+            for f in fig_dir.iterdir()
+            if f.is_file() and f.suffix.lower() in (".png", ".svg", ".jpg", ".jpeg", ".webp")
+        ])
+    if local:
+        return local
+
+    datamap = _safe_read_json(
+        _version_root(version) / "datamap.json",
+        _hf_version_url(version, "datamap.json"),
+    )
+    files = datamap.get("files", []) if isinstance(datamap, dict) else []
+    remote_figs = []
+    for item in files:
+        if not isinstance(item, dict):
+            continue
+        rel = str(item.get("path", ""))
+        if not rel.startswith("figures/"):
+            continue
+        name = Path(rel).name
+        if Path(name).suffix.lower() in (".png", ".svg", ".jpg", ".jpeg", ".webp"):
+            remote_figs.append(name)
+    return sorted(set(remote_figs))
 
 
 def _battery_stats_for_version(version: str) -> dict:
@@ -230,55 +309,42 @@ def _build_metrics_payload(version: str) -> dict:
     _ensure_version(version)
     root = _version_root(version)
 
-    # Ensure artifacts required by metrics exist locally for this version.
-    try:
-        ensure_metadata_first([version])
-        results_dir = root / "results"
-        figures_dir = root / "figures"
-        has_results = results_dir.exists() and any(results_dir.glob("*"))
-        has_figures = figures_dir.exists() and any(figures_dir.glob("*"))
-        if not has_results and not has_figures:
-            download_metrics_bundle(version)
-    except Exception:
-        # Keep endpoint resilient; payload will still be built from whatever exists.
-        pass
-
     results = root / "results"
     reports = root / "reports"
-    models_meta = _safe_read_json(root / "models.json")
-    datamap = _safe_read_json(root / "datamap.json")
+    models_meta = _safe_read_json(root / "models.json", _hf_version_url(version, "models.json"))
+    datamap = _safe_read_json(root / "datamap.json", _hf_version_url(version, "datamap.json"))
     dataset_info = _load_dataset_info()
 
-    unified = _safe_read_csv_first([results / "unified_results.csv"])
-    classical_results = _safe_read_csv_first([
-        results / "classical_results.csv",
-        results / "classical_soh_results.csv",
+    unified = _safe_read_csv_first(version, ["results/unified_results.csv"])
+    classical_results = _safe_read_csv_first(version, [
+        "results/classical_results.csv",
+        "results/classical_soh_results.csv",
     ])
-    classical_soh = _safe_read_csv_first([results / "classical_soh_results.csv"])
-    lstm_results = _safe_read_csv_first([results / "lstm_soh_results.csv"])
-    ensemble_results = _safe_read_csv_first([results / "ensemble_results.csv"])
-    transformer_results = _safe_read_csv_first([results / "transformer_soh_results.csv"])
-    validation = _safe_read_csv_first([
-        results / "model_validation.csv",
-        reports / "model_validation.csv",
+    classical_soh = _safe_read_csv_first(version, ["results/classical_soh_results.csv"])
+    lstm_results = _safe_read_csv_first(version, ["results/lstm_soh_results.csv"])
+    ensemble_results = _safe_read_csv_first(version, ["results/ensemble_results.csv"])
+    transformer_results = _safe_read_csv_first(version, ["results/transformer_soh_results.csv"])
+    validation = _safe_read_csv_first(version, [
+        "results/model_validation.csv",
+        "reports/model_validation.csv",
     ])
-    rankings = _safe_read_csv_first([results / "final_rankings.csv"])
-    classical_rul = _safe_read_csv_first([results / "classical_rul_results.csv"])
+    rankings = _safe_read_csv_first(version, ["results/final_rankings.csv"])
+    classical_rul = _safe_read_csv_first(version, ["results/classical_rul_results.csv"])
 
-    training_summary = _safe_read_json_first([
-        results / "training_summary.json",
-        reports / "training_summary.json",
+    training_summary = _safe_read_json_first(version, [
+        "results/training_summary.json",
+        "reports/training_summary.json",
     ])
-    validation_summary = _safe_read_json_first([
-        results / "validation_summary.json",
-        reports / "validation_summary.json",
+    validation_summary = _safe_read_json_first(version, [
+        "results/validation_summary.json",
+        "reports/validation_summary.json",
     ])
-    intra_battery = _safe_read_json_first([
-        results / "intra_battery.json",
-        reports / "intra_battery.json",
+    intra_battery = _safe_read_json_first(version, [
+        "results/intra_battery.json",
+        "reports/intra_battery.json",
     ])
-    vae_lstm = _safe_read_json_first([results / "vae_lstm_results.json"])
-    dg_itransformer = _safe_read_json_first([results / "dg_itransformer_results.json"])
+    vae_lstm = _safe_read_json_first(version, ["results/vae_lstm_results.json"])
+    dg_itransformer = _safe_read_json_first(version, ["results/dg_itransformer_results.json"])
 
     # Fallback: build unified/classical-like rows directly from models.json when
     # result CSVs are not yet downloaded for a version.
@@ -366,7 +432,15 @@ async def get_version_figure(version: str, filename: str):
     _ensure_version(version)
     path = _version_root(version) / "figures" / filename
     if not path.exists():
-        raise HTTPException(404, f"Figure {filename} not found for {version}")
+        requested = Path(filename).name
+        if requested != filename:
+            raise HTTPException(400, "Invalid figure filename")
+        if requested not in set(_version_figures(version)):
+            raise HTTPException(404, f"Figure {filename} not found for {version}")
+        return RedirectResponse(
+            url=_hf_version_url(version, f"figures/{requested}"),
+            status_code=307,
+        )
     content_type = "image/png"
     if path.suffix == ".html":
         content_type = "text/html"

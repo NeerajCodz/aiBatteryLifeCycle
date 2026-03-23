@@ -1,86 +1,76 @@
 # Tests Directory
 
-Automated test and validation scripts for the AI Battery Lifecycle Predictor.
+Pytest-based test suite for API routers, schemas, utility modules, feature engineering,
+model-registry helpers, and lightweight model wrappers.
 
-## Test Scripts
+## Running tests
 
-### 1. `test_v2_models.py` — Comprehensive V2 Validation
-Validates all 14 v2 classical models against test set with detailed reporting.
+Run full suite:
 
-**Usage:**
 ```bash
-python tests/test_v2_models.py
+python -m pytest -q
 ```
 
-**Output:**
-- `artifacts/v2/results/model_validation.csv` — Full metrics table
-- `artifacts/v2/results/validation_summary.json` — Summary statistics
-- `artifacts/v2/figures/validation_accuracy_bars.png` — Accuracy ranking chart
-- `artifacts/v2/figures/r2_vs_accuracy.png` — R² vs accuracy scatter plot
-- `artifacts/v2/figures/best_model_analysis.png` — Best model performance
-- `artifacts/v2/figures/per_battery_accuracy.png` — Per-battery accuracy heatmap
-- `artifacts/v2/results/validation_report.html` — HTML report
-- `artifacts/v2/results/validation_report.md` — Markdown report
+Run a specific module:
 
-**Target Metrics:**
-- Within-±5% SOH Accuracy ≥ 95% (primary success metric)
-- Within-±2% SOH Accuracy (secondary)
-- R² ≥ 0.95 (correlation)
-- MAE ≤ 3% (mean absolute error)
-
-### 2. `test_predictions.py` — Quick Endpoint Validation
-Quick validation of prediction endpoint with sample features on model registry.
-
-**Usage:**
 ```bash
-python tests/test_predictions.py
+python -m pytest -q tests/routers/test_visualize_router.py
 ```
 
-**Output:** Console output showing predictions for 4 test scenarios:
-- Early life cycle (SOH ≈ 99%)
-- Healthy cycle (SOH ≈ 97%)
-- Degraded cycle (SOH ≈ 80%)
-- End-of-life cycle (SOH ≈ 40%)
+Run by feature folder:
 
-## Running Tests
-
-### Run all tests
 ```bash
-python tests/test_v2_models.py
-python tests/test_predictions.py
+python -m pytest -q tests/data
+python -m pytest -q tests/routers
+python -m pytest -q tests/models
 ```
 
-### Run individual test
-```bash
-python tests/test_v2_models.py    # V2 model validation
-python tests/test_predictions.py  # Endpoint test
-```
+## Test layout
 
-## Test Data
+- `tests/api`:
+  - schema validation (`api.schemas`)
+  - `api.main` version/model lifecycle endpoints
+- `tests/routers`:
+  - `predict`, `predict_v2`, `predict_v3`
+  - `simulate`
+  - `visualize`
+- `tests/data`:
+  - `src.data.loader`
+  - `src.data.preprocessing`
+  - `src.data.features`
+- `tests/evaluation`:
+  - metrics and recommendations
+- `tests/models`:
+  - model registry helpers
+  - ensemble/classical model wrappers
+- `tests/utils`:
+  - config paths
+  - logger
+  - plotting helpers
 
-Tests use:
-- **Features:** `artifacts/v2/results/battery_features.csv` (2,678 samples)
-- **Target:** SOH (State of Health) percentage
-- **Split:** Intra-battery chronological (first 80% cycles → train, last 20% → test)
-- **Batteries:** All 30 usable batteries in both train and test
+## Current coverage scope
 
-## Model Versions Tested
+- API routers:
+  - `api.routers.predict`
+  - `api.routers.predict_v2`
+  - `api.routers.predict_v3`
+  - `api.routers.simulate`
+  - `api.routers.visualize`
+- API core helpers in `api.main`
+- Data/feature utilities:
+  - `src.data.loader`
+  - `src.data.preprocessing`
+  - `src.data.features`
+- Evaluation utilities:
+  - `src.evaluation.metrics`
+  - `src.evaluation.recommendations`
+- Core config/logger/plotting helpers
+- Model registry pure/helper behavior
+- Lightweight smoke tests for classical models and ensemble wrappers
 
-| Model | Category | V2 Status |
-|-------|----------|-----------|
-| ExtraTrees | Tree | ✓ v2.0.0 |
-| GradientBoosting | Tree | ✓ v2.0.0 |  
-| RandomForest | Tree | v1.0.0 |
-| XGBoost | Tree | v1.0.0 |
-| LightGBM | Tree | v1.0.0 |
-| SVR | Linear | v1.0.0 |
-| Ridge | Linear | v1.0.0 |
-| Lasso | Linear | v1.0.0 |
-| ElasticNet | Linear | v1.0.0 |
-| KNN (k=5, 10, 20) | Linear | v1.0.0 |
+## Notes
 
-## Success Criteria
-
-✓ Model passes if: **Within-±5% Accuracy ≥ 95%**
-
-Current pass rate: See latest report in `artifacts/v2/results/validation_report.html`
+- Tests are designed to be deterministic and fast.
+- Heavyweight model loading is monkeypatched/stubbed where possible.
+- Matplotlib is forced to a non-GUI backend (`Agg`) in `tests/conftest.py` for CI/headless safety.
+- Some tests write temporary or small artifacts under existing project artifact paths.
