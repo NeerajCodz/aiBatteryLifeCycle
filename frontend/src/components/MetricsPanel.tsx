@@ -9,9 +9,9 @@ import {
   Trophy, BarChart2, Target, Cpu, CheckCircle2, Database, Layers,
   TrendingUp, TrendingDown, Activity, Zap, Filter, ArrowUpDown,
   Award, GitCompare, Search, FlaskConical, BrainCircuit,
-  GanttChart, ImageIcon, X, Gauge, Info,
+  GanttChart, ImageIcon, X, FileText,
 } from "lucide-react";
-import { fetchMetrics, fetchVersionFiguresManifest, type FigureManifestItem } from "../api";
+import { fetchMetrics, fetchVersionFiguresManifest, type FigureManifestItem, type PaperFigureArtifact, type PaperTable } from "../api";
 
 interface MetricsData {
   version?: string;
@@ -34,6 +34,8 @@ interface MetricsData {
   figures: string[];
   figures_manifest?: FigureManifestItem[];
   battery_stats: any;
+  paper_tables?: PaperTable[];
+  paper_figures?: PaperFigureArtifact[];
 }
 
 const CHART_COLORS = [
@@ -56,6 +58,77 @@ function MetricBadge({ value, metric }: { value: number; metric: MetricKey }) {
   const ok = isError ? value < 5 : value > 0.7;
   const cls = good ? "text-green-400 bg-green-900/30" : ok ? "text-yellow-400 bg-yellow-900/30" : "text-red-400 bg-red-900/30";
   return <span className={`px-2 py-0.5 rounded text-xs font-mono font-semibold ${cls}`}>{value.toFixed(4)}</span>;
+}
+
+function formatCellValue(value: unknown): string {
+  if (value == null) return "—";
+  if (typeof value === "number") {
+    if (!Number.isFinite(value)) return "—";
+    if (Math.abs(value) >= 1000) return value.toLocaleString(undefined, { maximumFractionDigits: 3 });
+    if (Number.isInteger(value)) return value.toLocaleString();
+    return value.toFixed(4);
+  }
+  const numeric = Number(String(value).replace(/,/g, ""));
+  if (Number.isFinite(numeric)) {
+    if (String(value).includes(".")) return numeric.toFixed(4);
+    return numeric.toLocaleString();
+  }
+  return String(value);
+}
+
+function CsvLikeTable({ title, rows }: { title: string; rows: Record<string, unknown>[] }) {
+  const [expanded, setExpanded] = useState(true);
+  if (!rows?.length) {
+    return (
+      <div className="bg-gray-900 rounded-xl p-5 border border-gray-800">
+        <div className="flex items-center justify-between mb-3">
+          <h3 className="text-sm font-semibold text-gray-300 uppercase tracking-wide">{title}</h3>
+        </div>
+        <p className="text-sm text-gray-500">No rows available.</p>
+      </div>
+    );
+  }
+
+  const columns = Object.keys(rows[0] ?? {});
+  return (
+    <div className="bg-gray-900 rounded-xl p-5 border border-gray-800">
+      <div className="flex items-center justify-between gap-4 mb-3">
+        <h3 className="text-sm font-semibold text-gray-300 uppercase tracking-wide">{title}</h3>
+        <button
+          onClick={() => setExpanded((v) => !v)}
+          className="text-xs text-gray-400 hover:text-white border border-gray-700 rounded px-2 py-1"
+        >
+          {expanded ? "Collapse" : "Expand"}
+        </button>
+      </div>
+      {!expanded ? null : (
+        <div className="overflow-x-auto">
+          <table className="w-full text-xs">
+            <thead>
+              <tr className="text-gray-400 border-b border-gray-700">
+                {columns.map((col) => (
+                  <th key={col} className="py-2 px-3 text-left font-semibold text-gray-300 uppercase tracking-wide">
+                    {col}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((row, idx) => (
+                <tr key={`${title}-row-${idx}`} className="border-b border-gray-800/50 hover:bg-gray-800/40">
+                  {columns.map((col) => (
+                    <td key={`${title}-row-${idx}-${col}`} className="py-2 px-3 text-gray-400">
+                      {formatCellValue(row[col])}
+                    </td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
 }
 
 function SectionBadge({ icon, label, active, onClick }: {
@@ -153,6 +226,7 @@ export default function MetricsPanel({ apiVersion = "v3" }: Props) {
     { key: "validation", label: "Validation", icon: <CheckCircle2 className="w-4 h-4" /> },
     { key: "deep", label: "Deep Learning", icon: <BrainCircuit className="w-4 h-4" /> },
     { key: "dataset", label: "Dataset", icon: <Database className="w-4 h-4" /> },
+    { key: "paper", label: "Paper Assets", icon: <FileText className="w-4 h-4" /> },
     { key: "figures", label: "Figures", icon: <ImageIcon className="w-4 h-4" /> },
   ];
 
@@ -245,6 +319,9 @@ export default function MetricsPanel({ apiVersion = "v3" }: Props) {
     });
   }, [figuresManifest, figureSearch]);
 
+  const paperTables = useMemo(() => Array.isArray(data?.paper_tables) ? data.paper_tables : [], [data]);
+  const paperFigures = useMemo(() => Array.isArray(data?.paper_figures) ? data.paper_figures : [], [data]);
+
   const filteredModels = useMemo(() => {
     const base = unifiedSorted.length ? unifiedSorted : classicalV2Sorted;
     const rows = familyFilter !== "all"
@@ -317,9 +394,21 @@ export default function MetricsPanel({ apiVersion = "v3" }: Props) {
       ? (Object.entries(ds.feature_sets) as [string, string[]][])
       : [];
 
+  const paperTablesForView = paperTables.map((entry) => ({
+    ...entry,
+    rows: Array.isArray(entry.rows) ? entry.rows : [],
+  }));
+  const paperTableByKey = paperTablesForView.reduce((acc, item) => {
+    acc[item.key] = item.rows;
+    return acc;
+  }, {} as Record<string, any[]>);
+  const datasetSummaryTableRows = paperTableByKey.table_1_dataset_summary ?? [];
+  const hasPaperAssets = paperTablesForView.length > 0 || paperFigures.length > 0;
+
   const allFigures = figuresManifest;
   const hasAnyFigures = allFigures.length > 0;
   const hasSearchQuery = figureSearch.trim().length > 0;
+  const figureImageFormats = new Set(["png", "jpg", "jpeg", "svg", "webp"]);
 
   const sohStats = bs ? {
     min: bs.min_soh,
@@ -997,7 +1086,82 @@ export default function MetricsPanel({ apiVersion = "v3" }: Props) {
               </div>
             </div>
           </div>
+
+          {datasetSummaryTableRows.length > 0 && (
+            <CsvLikeTable
+              title="Reviewer Table 1 — Dataset-level summary (NASA, CALCE, Oxford)"
+              rows={datasetSummaryTableRows as Record<string, unknown>[]}
+            />
+          )}
         </>
+      )}
+
+      {/* ═══════ PAPER ASSETS ═══════ */}
+      {activeSection === "paper" && (
+        <div className="space-y-6">
+          {hasPaperAssets ? (
+            <>
+              <div>
+                <h3 className="text-sm text-gray-400 uppercase tracking-wide mb-3">Paper tables (v3 artifact package)</h3>
+                <div className="space-y-4">
+                  {paperTablesForView.map((entry) => (
+                    <CsvLikeTable
+                      key={entry.key}
+                      title={entry.title}
+                      rows={entry.rows}
+                    />
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <h3 className="text-sm text-gray-400 uppercase tracking-wide mb-3">Paper figures (download-ready formats)</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {paperFigures.map((fig) => {
+                    const imageFiles = fig.files.filter((f) => figureImageFormats.has(f.format));
+                    const preview = imageFiles[0] ?? fig.files[0];
+                    return (
+                      <div key={`${fig.artifact}-${fig.purpose}`} className="bg-gray-900 rounded-xl border border-gray-800 overflow-hidden">
+                        <div className="aspect-4/3 bg-gray-800 overflow-hidden">
+                          {preview && (
+                            <img
+                              src={preview.url}
+                              alt={fig.artifact}
+                              className="w-full h-full object-contain"
+                              loading="lazy"
+                            />
+                          )}
+                        </div>
+                        <div className="p-3 space-y-2">
+                          <div className="text-sm text-gray-200 font-semibold">{fig.artifact}</div>
+                          {fig.purpose && <div className="text-xs text-gray-400">{fig.purpose}</div>}
+                          <div className="flex flex-wrap gap-2 pt-1">
+                            {fig.files.map((file) => (
+                              <a
+                                key={file.filename}
+                                href={file.url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-xs px-2 py-1 rounded bg-gray-800 border border-gray-700 hover:border-gray-500 text-gray-300 hover:text-white"
+                              >
+                                {file.format.toUpperCase()}
+                              </a>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            </>
+          ) : (
+            <div className="bg-yellow-900/20 border border-yellow-800 rounded-xl p-6 text-yellow-300">
+              No paper artifacts were found for <strong>{activeVersion.toUpperCase()}</strong>.
+              Switch to v3 to view all paper tables and figure assets.
+            </div>
+          )}
+        </div>
       )}
 
       {/* ═══════ FIGURES ═══════ */}

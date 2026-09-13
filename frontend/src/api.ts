@@ -89,6 +89,25 @@ export interface FigureManifestItem {
   url: string;
 }
 
+export interface PaperTable {
+  key: string;
+  title: string;
+  source: string;
+  rows: Record<string, any>[];
+}
+
+export interface PaperFigureFile {
+  filename: string;
+  format: string;
+  url: string;
+}
+
+export interface PaperFigureArtifact {
+  artifact: string;
+  purpose: string;
+  files: PaperFigureFile[];
+}
+
 // ── Version management ───────────────────────────────────────────────────────
 export interface VersionInfo {
   id: string;            // "v1" | "v2" | "v3"

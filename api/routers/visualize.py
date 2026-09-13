@@ -39,6 +39,34 @@ _HF_TREE_API_BASE = os.getenv(
 )
 
 _SUPPORTED_VERSIONS = {"v1", "v2", "v3"}
+_PAPER_TABLE_PATTERNS = ["table_1_", "table_2_", "table_3_", "table_4_", "table_5_", "table_6_", "table_7_", "table_8_", "table_9_", "table_10_"]
+_PAPER_TABLE_NAMES = {
+    "table_1": "Table 1 | Dataset summary across NASA, CALCE, Oxford",
+    "table_2": "Table 2 | NASA grouped results",
+    "table_3": "Table 3 | CALCE grouped results",
+    "table_4": "Table 4 | Oxford grouped results",
+    "table_5": "Table 5 | Protocol comparison",
+    "table_6": "Table 6 | Feature importance",
+    "table_7": "Table 7 | Feature ablation",
+    "table_8": "Table 8 | External validation",
+    "table_9": "Table 9 | Sensor stress",
+    "table_10": "Table 10 | Bootstrap uncertainty intervals",
+}
+
+
+def _read_table_name(path: Path) -> str:
+    stem = path.stem
+    prefix = stem.split("_", 1)[0]
+    if prefix in _PAPER_TABLE_NAMES:
+        return _PAPER_TABLE_NAMES[prefix]
+    return stem.replace("_", " ").title()
+
+
+def _is_supported_table(path: Path) -> bool:
+    if not (path.is_file() and path.suffix.lower() == ".csv"):
+        return False
+    name = path.stem
+    return any(name.startswith(p) for p in _PAPER_TABLE_PATTERNS)
 
 
 # ── Dashboard aggregate ──────────────────────────────────────────────────────
@@ -424,6 +452,79 @@ def _safe_read_csv(path: Path, remote_url: str | None = None) -> list[dict]:
         return []
 
 
+def _paper_tables_for_version(version: str) -> list[dict[str, Any]]:
+    root = _version_root(version)
+    tables = []
+    table_dir = root / "tables"
+    if not table_dir.exists():
+        return tables
+
+    def sort_key(path: Path) -> tuple[int, str]:
+        parts = path.stem.replace("table_", "").split("_", 1)
+        try:
+            index = int(parts[0])
+        except Exception:
+            index = 9999
+        return (index, path.stem)
+
+    for path in sorted((p for p in table_dir.iterdir() if _is_supported_table(p)), key=sort_key):
+        rows = _safe_read_csv(path, _hf_version_url(version, f"tables/{path.name}"))
+        if not rows:
+            continue
+        tables.append({
+            "key": path.stem,
+            "title": _read_table_name(path),
+            "rows": rows,
+            "source": f"tables/{path.name}",
+        })
+    return tables
+
+
+def _paper_figures_for_version(version: str) -> list[dict[str, Any]]:
+    root = _version_root(version)
+    payload = _safe_read_json_any(
+        root / "paper_artifact_manifest.json",
+        _hf_version_url(version, "paper_artifact_manifest.json"),
+    )
+    if not isinstance(payload, list):
+        return []
+
+    out: list[dict[str, Any]] = []
+    for item in payload:
+        if not isinstance(item, dict):
+            continue
+
+        files = item.get("files")
+        if not isinstance(files, list):
+            continue
+
+        normalized_files: list[dict[str, str]] = []
+        for raw in files:
+            if not isinstance(raw, str):
+                continue
+            filename = _location_filename(raw)
+            if not filename:
+                continue
+            if not Path(filename).suffix.lower() in (".png", ".svg", ".pdf", ".jpg", ".jpeg", ".webp"):
+                continue
+            url = f"/api/{version}/figures/{quote(filename)}"
+            normalized_files.append({
+                "filename": filename,
+                "url": url,
+                "format": Path(filename).suffix.lower().lstrip("."),
+            })
+
+        if not normalized_files:
+            continue
+
+        normalized_files.sort(key=lambda item: {"png": 0, "svg": 1, "pdf": 2, "jpg": 3, "jpeg": 3, "webp": 4}.get(item["format"], 99))
+        out.append({
+            "artifact": str(item.get("artifact", "")).strip(),
+            "purpose": str(item.get("purpose", "")).strip(),
+            "files": normalized_files,
+        })
+    return out
+
 def _safe_read_json(path: Path, remote_url: str | None = None) -> dict:
     """Read JSON from disk, then fallback to HF raw URL."""
     if path.exists():
@@ -653,6 +754,8 @@ def _build_metrics_payload(version: str) -> dict:
         "figures_manifest": figures_manifest,
         "battery_stats": _battery_stats_for_version(version),
         "dataset_info": dataset_info,
+        "paper_tables": _paper_tables_for_version(version),
+        "paper_figures": _paper_figures_for_version(version),
     }
 
 
