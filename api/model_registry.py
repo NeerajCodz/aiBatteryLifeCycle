@@ -31,6 +31,7 @@ import numpy as np
 import pandas as pd
 
 from src.utils.logger import get_logger
+from src.utils.config import FEATURE_COLS_V3
 
 log = get_logger(__name__)
 
@@ -70,18 +71,9 @@ FEATURE_COLS_SCALAR: list[str] = [
     "cycle_duration", "Re", "Rct", "delta_capacity",
 ]
 
-# v3 extended feature set: FEATURE_COLS_SCALAR + 6 engineered columns.
-# Order MUST match the training notebook (NB08 / v3 train_split.csv).
-# NOTE: coulombic_efficiency is always 0 in the training data and was dropped;
-#       soh_rolling_mean WAS retained as a feature (data-leakage intentional).
-V3_FEATURE_COLS: list[str] = [
-    "cycle_number", "ambient_temperature",
-    "peak_voltage", "min_voltage", "voltage_range",
-    "avg_current", "avg_temp", "temp_rise",
-    "cycle_duration", "Re", "Rct", "delta_capacity",
-    "capacity_retention", "cumulative_energy",
-    "dRe_dn", "dRct_dn", "soh_rolling_mean", "voltage_slope",
-]
+# v3 leakage-safe partial-discharge contract. Order must match the feature
+# builder, API schema, release manifest, and serialized pipeline exactly.
+V3_FEATURE_COLS: list[str] = list(FEATURE_COLS_V3)
 
 # Columns present in the features CSV that are NOT model inputs
 # (targets, identifiers, or derived labels).
@@ -567,6 +559,11 @@ class ModelRegistry:
 
     def _choose_default(self) -> None:
         """Select the highest-quality loaded model as the registry default."""
+        manifest_default = self._version_meta.get("default_model")
+        if manifest_default in self.models:
+            self.default_model = manifest_default
+            log.info("Default model from manifest: %s", manifest_default)
+            return
         priority = [
             "best_ensemble",
             "extra_trees",
@@ -748,8 +745,9 @@ class ModelRegistry:
         Parameters
         ----------
         features:
-            Dict of cycle features; keys from :data:`FEATURE_COLS_SCALAR`.
-            Missing keys are filled with 0.0.
+            Dict in this registry version's feature order. v3 requires every
+            leakage-safe partial-discharge field; legacy versions retain their
+            historical zero-fill behavior.
         model_name:
             Registry model key (e.g. ``"best_ensemble"``, ``"random_forest"``,
             ``"tft"``).  Defaults to :attr:`default_model`.
@@ -757,13 +755,18 @@ class ModelRegistry:
         Returns
         -------
         dict
-            ``soh_pct``, ``degradation_state``, ``rul_cycles``,
-            ``confidence_lower``, ``confidence_upper``,
-            ``model_used``, ``model_version``.
+            SOH, degradation display label, model identity, and version. Legacy
+            v1/v2 registries also return their historical heuristic RUL and
+            fixed-width interval fields; those values are null for v3.
         """
         name = model_name or self.default_model
         if name is None:
             raise ValueError("No models loaded in registry")
+
+        if self.version == "v3":
+            missing = [column for column in self.feature_cols if column not in features]
+            if missing:
+                raise ValueError(f"Missing required v3 features: {missing}")
 
         x = self._build_x(features)
 
@@ -827,19 +830,27 @@ class ModelRegistry:
 
         soh = float(np.clip(soh, 0.0, 100.0))
 
-        # ── RUL estimate ────────────────────────────────────────────────
+        # ── Legacy-only RUL estimate ───────────────────────────────────
         # Data-driven estimate: linear degradation from current SOH to 70%
         # (EOL threshold), calibrated to NASA dataset's ~0.2-0.4 %/cycle rate.
         EOL_THRESHOLD = 70.0
-        if soh > EOL_THRESHOLD:
+        if self.version == "v3":
+            rul = None
+            confidence_lower = None
+            confidence_upper = None
+        elif soh > EOL_THRESHOLD:
             # Degradation rate: use delta_capacity as a proxy (Ah/cycle)
             # NASA nominal: ~2.0 Ah, so %/cycle = delta_cap / 2.0 * 100
             cap_loss_per_cycle_pct = abs(features.get("delta_capacity", -0.005)) / 2.0 * 100
             # Clamp to realistic range: 0.05 – 2.0 %/cycle
             rate = max(0.05, min(cap_loss_per_cycle_pct, 2.0))
             rul = (soh - EOL_THRESHOLD) / rate
+            confidence_lower = round(soh - 2.0, 2)
+            confidence_upper = round(soh + 2.0, 2)
         else:
             rul = 0.0
+            confidence_lower = round(soh - 2.0, 2)
+            confidence_upper = round(soh + 2.0, 2)
 
         # Normalize version to registry major (e.g. v3 registry → 3.0.0)
         raw_ver = self.model_meta.get(name, self._catalog.get(name, {})).get("version", "?")
@@ -853,9 +864,9 @@ class ModelRegistry:
         return {
             "soh_pct": round(soh, 2),
             "degradation_state": classify_degradation(soh),
-            "rul_cycles": round(rul, 1),
-            "confidence_lower": round(soh - 2.0, 2),
-            "confidence_upper": round(soh + 2.0, 2),
+            "rul_cycles": round(rul, 1) if rul is not None else None,
+            "confidence_lower": confidence_lower,
+            "confidence_upper": confidence_upper,
             "model_used": label,
             "model_version": version,
         }
@@ -1002,5 +1013,6 @@ registry_v1 = ModelRegistry(version="v1")
 registry_v2 = ModelRegistry(version="v2")
 registry_v3 = ModelRegistry(version="v3")
 
-# Default registry — v3 (best models, highest R²)
+# Deployment loads v3 by default. Unversioned prediction is a validated alias
+# of /api/v3; legacy contracts live only under explicit /api/v1 and /api/v2.
 registry = registry_v3

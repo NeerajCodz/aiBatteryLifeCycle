@@ -171,7 +171,7 @@ class TemporalFusionTransformer(nn.Module):
     - GRN-based output layer
 
     Input: (B, T, F) — T timesteps, F features
-    Output: (B,) — scalar SOH/RUL prediction
+    Output: (B,) — scalar current-cycle SOH estimate under the v3 contract
     """
 
     def __init__(

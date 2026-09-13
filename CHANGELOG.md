@@ -3,9 +3,16 @@
 All notable changes to this project will be documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and [Semantic Versioning](https://semver.org/).
 
+> **Revision notice (September 2026):** v1/v2 performance statements below are
+> retained only as historical release notes. They were produced under superseded
+> feature and validation contracts and must not be quoted as current evidence.
+> The reviewer-revision branch replaces them with battery-grouped validation,
+> target-safe features, independent NASA→CALCE/Oxford tests, and uncertainty and
+> residual analyses. Final v3 values are published only from versioned artifacts.
+
 ---
 
-## [2.0.0] — 2026-02-25 — Current Release
+## [2.0.0] — 2026-02-25 — Historical Release
 
 ### Major Features
 - **Intra-battery chronological split methodology** — Fixes critical data leakage in v1's cross-battery split. Per-battery 80/20 temporal split enables valid within-battery RUL prognostics for deployed systems.

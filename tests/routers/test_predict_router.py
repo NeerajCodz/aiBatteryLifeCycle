@@ -4,7 +4,20 @@ import pytest
 from fastapi import HTTPException
 
 from api.routers import predict as predict_router
-from api.schemas import BatchPredictRequest, PredictRequest, RecommendationRequest
+from api.schemas import V3BatchPredictRequest, V3PredictRequest, PredictRequest, RecommendationRequest
+
+
+def v3_request() -> V3PredictRequest:
+    return V3PredictRequest(
+        battery_id="B0005", cycle_number=10, prior_equivalent_full_cycles=8.7,
+        ambient_temperature=24, segment_duration_s=800, segment_energy_wh=0.9,
+        voltage_start_v=4.0, voltage_end_v=3.6, voltage_mean_v=3.8,
+        voltage_std_v=0.1, voltage_linear_slope_v_per_s=-0.0005,
+        voltage_curvature=0.0, current_mean_c_rate=1.0,
+        current_std_c_rate=0.02, temperature_mean_c=30,
+        temperature_std_c=2, temperature_rise_c=6,
+        temperature_slope_c_per_s=0.007, temperature_observed=1,
+    )
 
 
 class StubRegistry:
@@ -51,23 +64,20 @@ def stubbed_predict_registry(monkeypatch):
     return reg
 
 
-def test_predict_applies_avg_temp_offset(stubbed_predict_registry, run_async):
-    req = PredictRequest(
-        battery_id="B0005",
-        cycle_number=12,
-        ambient_temperature=24.0,
-        avg_temp=24.0,
-    )
+def test_predict_uses_v3_contract(stubbed_predict_registry, run_async):
+    req = v3_request()
     resp = run_async(predict_router.predict(req))
     assert resp.soh_pct == 91.2
     assert resp.model_used == "random_forest"
-    assert stubbed_predict_registry.last_features["avg_temp"] == 32.0
+    assert stubbed_predict_registry.last_features["cycle_index"] == 9
+    assert "capacity_ah" not in stubbed_predict_registry.last_features
 
 
 def test_predict_batch_returns_predictions(stubbed_predict_registry, run_async):
-    req = BatchPredictRequest(
+    row = v3_request().model_dump(exclude={"battery_id", "model_name"})
+    req = V3BatchPredictRequest(
         battery_id="B0006",
-        cycles=[{"cycle_number": 1}, {"cycle_number": 2}],
+        cycles=[{**row, "cycle_number": 1}, {**row, "cycle_number": 2}],
     )
     resp = run_async(predict_router.predict_batch(req))
     assert resp.battery_id == "B0006"
@@ -129,7 +139,7 @@ def test_predict_wraps_exceptions(monkeypatch, run_async):
             raise RuntimeError("bad")
 
     monkeypatch.setattr(predict_router, "registry", ErrorRegistry())
-    req = PredictRequest(battery_id="B0005", cycle_number=1)
+    req = v3_request()
     with pytest.raises(HTTPException) as ex:
         run_async(predict_router.predict(req))
     assert ex.value.status_code == 500

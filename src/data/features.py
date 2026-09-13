@@ -263,7 +263,7 @@ def build_battery_feature_dataset(
 
 # ── v3 enhanced features ────────────────────────────────────────────────────
 def add_v3_features(df: pd.DataFrame) -> pd.DataFrame:
-    """Add v3 physics-informed features on top of the base feature dataset.
+    """Add lagged historical features for legacy v3-table migration.
 
     New features (6 total):
     - capacity_retention: Q_n / Q_1 per battery (0-1, monotonically decreasing)
@@ -278,28 +278,32 @@ def add_v3_features(df: pd.DataFrame) -> pd.DataFrame:
     df : pd.DataFrame
         Output from ``build_battery_feature_dataset()``.
 
-    Returns
-    -------
-    pd.DataFrame
-        Same dataframe with 6 new columns appended.
+    No value from the current cycle's capacity or SOH is used. New training
+    code should prefer :mod:`src.data.partial_cycle`; this helper exists to
+    migrate historical tabular outputs safely.
     """
-    out = df.copy()
+    out = df.sort_values(["battery_id", "cycle_number"] if "cycle_number" in df else ["battery_id"]).copy()
 
-    # ── capacity_retention: Q_n / Q_1 per battery ───────────────────────────
+    # ── prior capacity retention: Q_(n-1) / Q_1 ─────────────────────────────
     first_cap = out.groupby("battery_id")["Capacity"].transform("first")
-    out["capacity_retention"] = out["Capacity"] / first_cap.replace(0, np.nan)
+    prior_cap = out.groupby("battery_id")["Capacity"].shift(1)
+    out["capacity_retention"] = prior_cap / first_cap.replace(0, np.nan)
+    out["capacity_retention"] = out["capacity_retention"].fillna(1.0)
 
-    # ── cumulative_energy: cumulative Ah throughput ─────────────────────────
-    out["cumulative_energy"] = out.groupby("battery_id")["Capacity"].cumsum()
+    # ── cumulative_energy: throughput before the current cycle ───────────────
+    out["cumulative_energy"] = out.groupby("battery_id")["Capacity"].transform(
+        lambda s: s.shift(1, fill_value=0.0).cumsum()
+    )
 
     # ── impedance growth rates (dRe/dn, dRct/dn) ───────────────────────────
     out["dRe_dn"] = out.groupby("battery_id")["Re"].diff().fillna(0)
     out["dRct_dn"] = out.groupby("battery_id")["Rct"].diff().fillna(0)
 
-    # ── SOH rolling mean (5-cycle window) ───────────────────────────────────
+    # ── historical SOH rolling mean (excludes current target) ────────────────
     out["soh_rolling_mean"] = out.groupby("battery_id")["SoH"].transform(
-        lambda s: s.rolling(window=5, min_periods=1, center=False).mean()
+        lambda s: s.shift(1).rolling(window=5, min_periods=1, center=False).mean()
     )
+    out["soh_rolling_mean"] = out["soh_rolling_mean"].fillna(100.0)
 
     # ── voltage_slope: cycle-over-cycle mid-voltage change ──────────────────
     if "peak_voltage" in out.columns and "min_voltage" in out.columns:
@@ -308,7 +312,7 @@ def add_v3_features(df: pd.DataFrame) -> pd.DataFrame:
     else:
         out["voltage_slope"] = 0.0
 
-    return out
+    return out.sort_index()
 
 
 def impute_features(df: pd.DataFrame) -> pd.DataFrame:

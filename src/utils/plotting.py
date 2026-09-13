@@ -75,7 +75,7 @@ def plot_capacity_fade(
     """MATLAB-style capacity degradation: Capacity (Ah) vs cycle number, per battery."""
     fig, ax = plt.subplots(figsize=FIG_SIZE)
     bats = battery_ids or sorted(cap_df["battery_id"].unique())
-    cmap = plt.cm.get_cmap("tab20", len(bats))
+    cmap = plt.get_cmap("tab20").resampled(len(bats))
     for i, bid in enumerate(bats):
         sub = cap_df[cap_df["battery_id"] == bid]
         ax.plot(sub["cycle_number"], sub["Capacity"], label=bid, color=cmap(i), linewidth=1.2)
@@ -160,8 +160,11 @@ def plot_capacity_by_temperature(
 ) -> plt.Figure:
     """Violin plot of discharge capacity by ambient temperature group."""
     fig, ax = plt.subplots(figsize=FIG_SIZE)
-    sns.violinplot(data=cap_df, x="ambient_temperature", y="Capacity", ax=ax,
-                   inner="quartile", palette="coolwarm", cut=0)
+    sns.violinplot(
+        data=cap_df, x="ambient_temperature", y="Capacity",
+        hue="ambient_temperature", legend=False, ax=ax,
+        inner="quartile", palette="coolwarm", cut=0,
+    )
     ax.set_xlabel("Ambient Temperature (°C)")
     ax.set_ylabel("Discharge Capacity (Ah)")
     ax.set_title("Capacity Distribution by Temperature")
@@ -272,7 +275,7 @@ def plot_radar_chart(
     angles += angles[:1]
 
     fig, ax = plt.subplots(figsize=(8, 8), subplot_kw=dict(polar=True))
-    cmap = plt.cm.get_cmap("Set2", len(models))
+    cmap = plt.get_cmap("Set2").resampled(len(models))
 
     for i, model in enumerate(models):
         values = [metrics_dict[model][m] for m in metric_names]
@@ -352,7 +355,7 @@ def plot_model_comparison_bars(
     width = 0.8 / n_metrics
 
     fig, ax = plt.subplots(figsize=(max(12, n_models * 1.5), 7))
-    cmap = plt.cm.get_cmap("Set2", n_metrics)
+    cmap = plt.get_cmap("Set2").resampled(n_metrics)
     for i, col in enumerate(metric_cols):
         offset = (i - n_metrics / 2 + 0.5) * width
         bars = ax.bar(x + offset, summary_df[col], width, label=col, color=cmap(i))

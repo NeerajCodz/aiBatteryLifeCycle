@@ -3,9 +3,23 @@ from __future__ import annotations
 import numpy as np
 import pytest
 from fastapi import HTTPException
+from pydantic import ValidationError
 
 from api.routers import predict_v3
-from api.schemas import BatchPredictRequest, PredictRequest, RecommendationRequest
+from api.schemas import V3BatchPredictRequest, V3PredictRequest, RecommendationRequest
+
+
+def v3_request() -> V3PredictRequest:
+    return V3PredictRequest(
+        battery_id="B0005", cycle_number=10, prior_equivalent_full_cycles=9,
+        ambient_temperature=24, segment_duration_s=800, segment_energy_wh=0.9,
+        voltage_start_v=4.0, voltage_end_v=3.6, voltage_mean_v=3.8,
+        voltage_std_v=0.1, voltage_linear_slope_v_per_s=-0.0005,
+        voltage_curvature=0.0, current_mean_c_rate=1.0,
+        current_std_c_rate=0.02, temperature_mean_c=30,
+        temperature_std_c=2, temperature_rise_c=6,
+        temperature_slope_c_per_s=0.007, temperature_observed=1,
+    )
 
 
 class StubV3Registry:
@@ -56,17 +70,26 @@ def stubbed_v3_registry(monkeypatch):
 
 
 def test_predict_v3(stubbed_v3_registry, run_async):
-    req = PredictRequest(battery_id="B0005", cycle_number=10)
+    req = v3_request()
     resp = run_async(predict_v3.predict_v3(req))
     assert resp.soh_pct == 93.0
     assert resp.model_version == "3.0.0"
-    assert stubbed_v3_registry.last_features["voltage_range"] == pytest.approx(1.58)
+    assert stubbed_v3_registry.last_features["cycle_index"] == 9
+    assert "capacity_ah" not in stubbed_v3_registry.last_features
+
+
+def test_v3_schema_rejects_target_and_unknown_fields():
+    payload = v3_request().model_dump()
+    payload["capacity_ah"] = 1.8
+    with pytest.raises(ValidationError):
+        V3PredictRequest(**payload)
 
 
 def test_predict_batch_v3(stubbed_v3_registry, run_async):
-    req = BatchPredictRequest(
+    row = v3_request().model_dump(exclude={"battery_id", "model_name"})
+    req = V3BatchPredictRequest(
         battery_id="B0005",
-        cycles=[{"cycle_number": 1}, {"cycle_number": 2}],
+        cycles=[{**row, "cycle_number": 1}, {**row, "cycle_number": 2}],
     )
     resp = run_async(predict_v3.predict_batch_v3(req))
     assert len(resp.predictions) == 2
@@ -91,7 +114,7 @@ def test_predict_v3_wraps_error(monkeypatch, run_async):
             raise RuntimeError("bad")
 
     monkeypatch.setattr(predict_v3, "registry_v3", ErrorRegistry())
-    req = PredictRequest(battery_id="B0005", cycle_number=10)
+    req = v3_request()
     with pytest.raises(HTTPException):
         run_async(predict_v3.predict_v3(req))
 

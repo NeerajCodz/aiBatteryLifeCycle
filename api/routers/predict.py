@@ -10,8 +10,8 @@ from fastapi import APIRouter, HTTPException
 
 from api.model_registry import registry, registry_v1, classify_degradation, soh_to_color
 from api.schemas import (
-    PredictRequest, PredictResponse,
-    BatchPredictRequest, BatchPredictResponse,
+    PredictRequest, V3PredictRequest, PredictResponse,
+    V3BatchPredictRequest, BatchPredictResponse,
     RecommendationRequest, RecommendationResponse, SingleRecommendation,
 )
 
@@ -23,14 +23,10 @@ v1_router = APIRouter(prefix="/api/v1", tags=["v1-prediction"])
 
 # ── Single prediction ────────────────────────────────────────────────────────
 @router.post("/predict", response_model=PredictResponse)
-async def predict(req: PredictRequest):
-    """Predict SOH for a single cycle."""
-    features = req.model_dump(exclude={"battery_id"})
-    features["voltage_range"] = features["peak_voltage"] - features["min_voltage"]
-    # If avg_temp equals ambient_temperature exactly, apply the NASA data offset
-    # (cell temperature is always 8-10°C above ambient under load).
-    if abs(features["avg_temp"] - features["ambient_temperature"]) < 0.5:
-        features["avg_temp"] = features["ambient_temperature"] + 8.0
+async def predict(req: V3PredictRequest):
+    """Unversioned alias for leakage-safe v3 current-cycle SOH estimation."""
+    features = req.model_dump(exclude={"battery_id", "model_name"})
+    features["cycle_index"] = features.pop("cycle_number") - 1
 
     try:
         result = registry.predict(features, req.model_name)
@@ -41,28 +37,33 @@ async def predict(req: PredictRequest):
         battery_id=req.battery_id,
         cycle_number=req.cycle_number,
         soh_pct=result["soh_pct"],
-        rul_cycles=result["rul_cycles"],
+        rul_cycles=None,
         degradation_state=result["degradation_state"],
-        confidence_lower=result["confidence_lower"],
-        confidence_upper=result["confidence_upper"],
+        confidence_lower=None,
+        confidence_upper=None,
         model_used=result["model_used"],
     )
 
 
 # ── Batch prediction ─────────────────────────────────────────────────────────
 @router.post("/predict/batch", response_model=BatchPredictResponse)
-async def predict_batch(req: BatchPredictRequest):
-    """Predict SOH for multiple cycles of one battery."""
-    results = registry.predict_batch(req.battery_id, req.cycles)
+async def predict_batch(req: V3BatchPredictRequest):
+    """Unversioned alias for validated v3 batch estimation."""
+    cycles = []
+    for row in req.cycles:
+        features = row.model_dump()
+        features["cycle_index"] = features["cycle_number"] - 1
+        cycles.append(features)
+    results = registry.predict_batch(req.battery_id, cycles)
     predictions = [
         PredictResponse(
             battery_id=req.battery_id,
             cycle_number=r["cycle_number"],
             soh_pct=r["soh_pct"],
-            rul_cycles=r["rul_cycles"],
+            rul_cycles=None,
             degradation_state=r["degradation_state"],
-            confidence_lower=r.get("confidence_lower"),
-            confidence_upper=r.get("confidence_upper"),
+            confidence_lower=None,
+            confidence_upper=None,
             model_used=r["model_used"],            model_version=r.get("model_version"),        )
         for r in results
     ]
@@ -75,8 +76,7 @@ async def recommend(req: RecommendationRequest):
     """Get operational recommendations for a battery based on physics-informed degradation model."""
     import itertools
     
-    # **FIXED**: Use physics-based degradation rates instead of unreliable RUL prediction
-    # Empirical degradation rates from NASA PCoE data analysis
+    # Exploratory, rule-based scenario rates; not a validated RUL model or controller.
     DEGRADATION_RATES = {
         # Format: (temp_range, current_level): % SOH loss per cycle
         "cold_light": 0.08,      # 4°C, <=1A

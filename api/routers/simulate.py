@@ -1,37 +1,22 @@
 ﻿"""
 api.routers.simulate
 ====================
-Bulk battery lifecycle simulation endpoint - vectorized ML-driven.
+Exploratory, vectorized battery lifecycle scenario endpoint.
 
-Performance design (O(1) Python overhead per battery regardless of step count):
-    1. SEI impedance growth  - numpy cumsum (no Python loop)
-    2. Feature matrix build  - numpy column_stack -> (N_steps, n_features)
-    3. ML prediction         - single model.predict() call via predict_array()
-    4. RUL / EOL             - numpy diff / cumsum / searchsorted
-    5. Classify / colorize   - numpy searchsorted on pre-built label arrays
-
-Scaler dispatch mirrors training exactly:
-    Tree models (RF / ET / XGB / LGB / GB)  -> raw numpy   (no scaler)
-    Linear / SVR / KNN                       -> standard_scaler.joblib.transform(X)
-    best_ensemble                            -> per-component dispatch (same rules)
-    Deep sequence models (PyTorch / Keras)   -> not batchable, falls back to physics
+This route intentionally does not call the v3 SOH estimators. Those estimators
+were validated only for current-cycle observations, not counterfactual future
+trajectories. The returned curves are deterministic illustrations driven by the
+user-provided capacity-loss assumption and must not be treated as forecasts.
 """
 
 from __future__ import annotations
 
 import logging
-from pathlib import Path
 from typing import List, Optional
 
-import joblib
 import numpy as np
 from fastapi import APIRouter
 from pydantic import BaseModel, Field
-
-from api.model_registry import (
-    FEATURE_COLS_SCALAR, V3_FEATURE_COLS, classify_degradation, soh_to_color,
-    registry_v3 as registry_v2,
-)
 
 log = logging.getLogger(__name__)
 
@@ -50,23 +35,10 @@ _TIME_UNIT_LABELS: dict[str, str] = {
     "month":  "Months",  "year":   "Years",
 }
 
-# Column index map - must stay in sync with FEATURE_COLS_SCALAR (12 features)
-_F = {col: idx for idx, col in enumerate(FEATURE_COLS_SCALAR)}
-# Column index map for V3_FEATURE_COLS (18 features)
-_F3 = {col: idx for idx, col in enumerate(V3_FEATURE_COLS)}
-
 # Pre-built label/color arrays for O(1) numpy-vectorized classification
 _SOH_BINS   = np.array([70.0, 80.0, 90.0])                       # searchsorted thresholds
 _DEG_LABELS = np.array(["End-of-Life", "Degraded", "Moderate", "Healthy"], dtype=object)
 _COLOR_HEX  = np.array(["#ef4444",     "#f97316",  "#eab308",  "#22c55e"], dtype=object)
-
-# Optional learned Re/Rct progression model (trained in NB03).
-_RE_RCT_MODEL_PATH = Path("artifacts") / "v3" / "models" / "classical" / "re_rct_progression.joblib"
-try:
-    _re_rct_model = joblib.load(_RE_RCT_MODEL_PATH)
-except Exception:
-    _re_rct_model = None
-
 
 def _vec_classify(soh: np.ndarray) -> list[str]:
     """Vectorized classify_degradation - single numpy call, no Python for-loop."""
@@ -102,7 +74,10 @@ class SimulateRequest(BaseModel):
     time_unit:     str           = Field(default="day")
     eol_threshold: float         = Field(default=70.0, ge=0.0, le=100.0)
     model_name:    Optional[str] = Field(default=None)
-    use_ml:        bool          = Field(default=True)
+    use_ml:        bool          = Field(
+        default=False,
+        description="Reserved for compatibility; v3 simulation remains an exploratory physics prototype.",
+    )
 
 
 class BatterySimResult(BaseModel):
@@ -131,122 +106,23 @@ class SimulateResponse(BaseModel):
     time_unit_label: str
     steps:           int
     model_used:      str = "physics"
+    validation_status: str = "exploratory_prototype"
+    disclaimer: str = (
+        "Illustrative trajectory only; not a validated forecast or control model."
+    )
 
 
 # -- Helpers ------------------------------------------------------------------
-def _build_feature_matrix(
-    b: BatterySimConfig,
-    cycle_arr: np.ndarray,
-    re_arr: np.ndarray,
-    rct_arr: np.ndarray,
-    soh_rolling_override: np.ndarray | None = None,
-) -> np.ndarray:
-    """Build (steps, n_features) feature matrix in registry.feature_cols order.
-
-    For v3 (18 features) the extra 6 engineered columns are estimated from physics:
-      - capacity_retention: current capacity / initial capacity
-      - cumulative_energy:  cumsumed capacity per cycle (Ah)
-      - dRe_dn / dRct_dn:  per-cycle derivative of SEI impedances
-      - soh_rolling_mean:   rolling mean of physics-estimated SOH trajectory
-      - voltage_slope:      assumed constant (0) in simulation
-
-    Column ordering uses registry_v2.feature_cols so predictions are correct
-    regardless of whether the registry is v1/v2 (12 cols) or v3 (18 cols).
-    """
-    cycles = np.asarray(cycle_arr, dtype=np.float64)
-    N = len(cycles)
-    steps_elapsed = np.maximum(cycles - cycles[0], 0.0)
-
-    # ---- 12 base features (always present) ---------------------------------
-    feat_dict: dict[str, np.ndarray] = {
-        "cycle_number":        cycles,
-        "ambient_temperature": np.full(N, b.ambient_temperature),
-        "peak_voltage":        np.full(N, b.peak_voltage),
-        "min_voltage":         np.full(N, b.min_voltage),
-        "voltage_range":       np.full(N, b.peak_voltage - b.min_voltage),
-        "avg_current":         np.full(N, b.avg_current),
-        "avg_temp":            np.full(N, b.avg_temp),
-        "temp_rise":           np.full(N, b.temp_rise),
-        "cycle_duration":      np.full(N, b.cycle_duration),
-        "Re":                  re_arr,
-        "Rct":                 rct_arr,
-        "delta_capacity":      np.full(N, b.delta_capacity),
-    }
-
-    # ---- 6 extra v3 features (estimated from physics) ----------------------
-    initial_cap = max(b.initial_soh / 100.0 * _Q_NOM, 1e-6)  # Ah
-    cap_per_step = np.maximum(initial_cap + b.delta_capacity * steps_elapsed, 0.0)
-
-    # capacity_retention = current_capacity / initial_capacity (ratio ~0-1)
-    cap_retention = np.clip(cap_per_step / initial_cap, 0.0, None)
-
-    # cumulative energy delivered (Ah)
-    cum_energy = np.cumsum(cap_per_step)
-
-    # per-cycle SEI impedance derivatives
-    dRe_dn  = np.diff(re_arr,  prepend=b.Re)
-    dRct_dn = np.diff(rct_arr, prepend=b.Rct)
-
-    # physics-estimated SOH rolling mean (window=10, min_periods=1) ---
-    # used as a proxy since soh_rolling_mean is a v3 training feature
-    deg_pct_per_cycle = abs(b.delta_capacity) / _Q_NOM * 100.0
-    soh_est = np.maximum(b.initial_soh - deg_pct_per_cycle * steps_elapsed, 0.0)
-    # rolling mean via cumsum (O(N), no Python loop)
-    window = 10
-    csoh  = np.cumsum(np.concatenate([[0.0], soh_est]))
-    cnt   = np.minimum(np.arange(1, N + 1), window)
-    start = np.maximum(np.arange(N + 1)[1:] - window, 0)
-    soh_rolling = (csoh[np.arange(1, N + 1)] - csoh[start]) / cnt
-
-    if soh_rolling_override is not None:
-        soh_rolling = np.asarray(soh_rolling_override, dtype=np.float64)
-
-    feat_dict.update({
-        "capacity_retention": cap_retention,
-        "cumulative_energy":  cum_energy,
-        "dRe_dn":             dRe_dn,
-        "dRct_dn":            dRct_dn,
-        "soh_rolling_mean":   soh_rolling,
-        "voltage_slope":      np.zeros(N),
-        "coulombic_efficiency": np.zeros(N),  # always 0 in training data
-    })
-
-    # Build matrix in registry's feature_cols order; unknown cols default to 0
-    feat_cols = registry_v2.feature_cols  # 12 for v1/v2, 18 for v3
-    return np.column_stack([feat_dict.get(col, np.zeros(N)) for col in feat_cols])
-
-
-def _rolling_mean(arr: np.ndarray, window: int = 5) -> np.ndarray:
-    """Fast rolling mean with min_periods=1 semantics."""
-    x = np.asarray(arr, dtype=np.float64)
-    n = len(x)
-    csum = np.cumsum(np.concatenate([[0.0], x]))
-    idx = np.arange(1, n + 1)
-    start = np.maximum(idx - window, 0)
-    count = np.minimum(idx, window)
-    return (csum[idx] - csum[start]) / count
-
-
 def _ml_re_rct(
     re0: float,
     rct0: float,
     cycle_arr: np.ndarray,
     elapsed_cycles: np.ndarray,
 ) -> tuple[np.ndarray, np.ndarray]:
-    """Predict Re/Rct from learned regressors and anchor to user initial state."""
-    if _re_rct_model is None:
-        # Minimal linear fallback if helper model is unavailable.
-        n = np.asarray(elapsed_cycles, dtype=np.float64)
-        re_arr = np.minimum(re0 + 0.00012 * n, 2.0)
-        rct_arr = np.minimum(rct0 + 0.00018 * n, 3.0)
-        return re_arr, rct_arr
-
-    x = np.asarray(cycle_arr, dtype=np.float64).reshape(-1, 1)
-    re_pred = _re_rct_model["re_model"].predict(x)
-    rct_pred = _re_rct_model["rct_model"].predict(x)
-    re_arr = np.clip(re_pred + (re0 - float(re_pred[0])), 0.0, 2.0)
-    rct_arr = np.clip(rct_pred + (rct0 - float(rct_pred[0])), 0.0, 3.0)
-    return re_arr, rct_arr
+    """Return illustrative impedance-growth curves anchored to user inputs."""
+    del cycle_arr  # retained in the signature for compatibility with older callers
+    n = np.asarray(elapsed_cycles, dtype=np.float64)
+    return np.minimum(re0 + 0.00012 * n, 2.0), np.minimum(rct0 + 0.00018 * n, 3.0)
 
 
 def _compute_rul_and_eol(
@@ -293,18 +169,13 @@ def _compute_rul_and_eol(
 @router.post(
     "/simulate",
     response_model=SimulateResponse,
-    summary="Bulk battery lifecycle simulation (vectorized, ML-driven)",
+    summary="Exploratory battery lifecycle scenario (not a forecast)",
 )
 async def simulate_batteries(req: SimulateRequest):
     """
-    Vectorized simulation: builds all N feature rows at once per battery,
-    dispatches to the ML model as a single batch predict() call, then
-    post-processes entirely with numpy (no Python for-loops).
-
-    Scaler usage mirrors NB03 training exactly:
-      - Tree models (RF/ET/XGB/LGB/GB): raw numpy X, no scaler
-      - Linear/SVR/KNN:                 standard_scaler.joblib.transform(X)
-      - best_ensemble:                  per-component family dispatch
+    Vectorized deterministic scenario based on the user-supplied capacity-loss
+    rate. ``model_name`` and ``use_ml`` are accepted only for compatibility and
+    do not select a fitted model.
     """
     time_unit = req.time_unit.lower()
     if time_unit not in _TIME_UNIT_SECONDS:
@@ -315,43 +186,10 @@ async def simulate_batteries(req: SimulateRequest):
     eol_thr  = req.eol_threshold
     N        = req.steps
 
-    requested_model = req.model_name or registry_v2.default_model or "best_ensemble"
-
-    # Resolve to a batchable loaded model once (to avoid per-battery fallback spam).
-    # Priority: requested -> registry default -> first loaded classical model.
-    model_name = requested_model
-    if requested_model == "best_ensemble":
-        ensemble_components = registry_v2.model_meta.get("best_ensemble", {}).get("components", [])
-        if not ensemble_components:
-            model_name = registry_v2.default_model or ""
-
-    family = registry_v2.model_meta.get(model_name, {}).get("family", "classical")
-    is_deep = family in ("deep_pytorch", "deep_keras")
-
-    if (model_name not in registry_v2.models) or is_deep:
-        fallback_loaded = [
-            name for name, meta in registry_v2.model_meta.items()
-            if name in registry_v2.models and meta.get("family") == "classical"
-        ]
-        if fallback_loaded:
-            model_name = fallback_loaded[0]
-            family = registry_v2.model_meta.get(model_name, {}).get("family", "classical")
-            is_deep = family in ("deep_pytorch", "deep_keras")
-
-    ml_batchable = req.use_ml and not is_deep and (model_name == "best_ensemble" or model_name in registry_v2.models)
-
-    # Determine scaler note for logging (mirrors training decision exactly)
-    if registry_v2.model_meta.get(model_name, {}).get("requires_scaling", False):
-        scaler_note = "standard_scaler"
-    elif model_name == "best_ensemble":
-        scaler_note = "per-component (tree=none / linear=standard_scaler)"
-    else:
-        scaler_note = "none (tree)"
-
-    effective_model = "linear_fallback"
+    effective_model = "exploratory_physics_prototype"
     log.info(
-        "simulate: %d batteries x %d steps | requested=%s | effective=%s | batchable=%s | scaler=%s | unit=%s",
-        len(req.batteries), N, requested_model, model_name, ml_batchable, scaler_note, time_unit,
+        "simulate: %d batteries x %d steps | requested=%s | effective=%s | unit=%s",
+        len(req.batteries), N, req.model_name, effective_model, time_unit,
     )
 
     results: list[BatterySimResult] = []
@@ -362,35 +200,12 @@ async def simulate_batteries(req: SimulateRequest):
         cycle_arr_float = b.start_cycle + elapsed_cycles
         cycle_arr = np.maximum(b.start_cycle, np.floor(cycle_arr_float).astype(np.int64))
 
-        # 1. Re/Rct progression - prefer learned model, fallback to simple linear slopes.
+        # 1. Illustrative Re/Rct progression.
         re_arr, rct_arr = _ml_re_rct(b.Re, b.Rct, cycle_arr, elapsed_cycles)
 
-        # 2. SOH prediction with two-pass soh_rolling_mean correction.
-        if ml_batchable:
-            X_pass1 = _build_feature_matrix(b, cycle_arr, re_arr, rct_arr)
-            try:
-                soh_pass1, effective_model = registry_v2.predict_array(X_pass1, model_name)
-                soh_roll = _rolling_mean(soh_pass1, window=5)
-                X_pass2 = _build_feature_matrix(
-                    b,
-                    cycle_arr,
-                    re_arr,
-                    rct_arr,
-                    soh_rolling_override=soh_roll,
-                )
-                soh_arr, effective_model = registry_v2.predict_array(X_pass2, model_name)
-            except Exception as exc:
-                log.warning(
-                    "predict_array failed for %s (%s) - falling back to linear",
-                    b.battery_id, exc,
-                )
-                deg_pct_per_cycle = abs(b.delta_capacity) / _Q_NOM * 100.0
-                soh_arr = np.clip(b.initial_soh - deg_pct_per_cycle * (elapsed_cycles + 1.0), 0.0, 100.0)
-                effective_model = "linear_fallback"
-        else:
-            deg_pct_per_cycle = abs(b.delta_capacity) / _Q_NOM * 100.0
-            soh_arr = np.clip(b.initial_soh - deg_pct_per_cycle * (elapsed_cycles + 1.0), 0.0, 100.0)
-            effective_model = "linear_fallback"
+        # 2. Deterministic SOH scenario; this is not a fitted-model prediction.
+        deg_pct_per_cycle = abs(b.delta_capacity) / _Q_NOM * 100.0
+        soh_arr = np.clip(b.initial_soh - deg_pct_per_cycle * (elapsed_cycles + 1.0), 0.0, 100.0)
 
         soh_arr = np.clip(soh_arr, 0.0, 100.0)
 
@@ -443,5 +258,10 @@ async def simulate_batteries(req: SimulateRequest):
         time_unit_label = tu_label,
         steps           = N,
         model_used      = effective_model,
+        validation_status = "exploratory_prototype",
+        disclaimer = (
+            "Illustrative trajectory only; the v3 SOH estimator was not trained "
+            "or validated for future-life simulation or operational control."
+        ),
     )
 

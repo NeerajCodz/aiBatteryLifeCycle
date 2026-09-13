@@ -19,15 +19,31 @@ export interface PredictRequest {
   battery_id: string;
   cycle_number: number;
   ambient_temperature: number;
-  peak_voltage: number;
-  min_voltage: number;
-  avg_current: number;
-  avg_temp: number;
-  temp_rise: number;
-  cycle_duration: number;
-  Re: number;
-  Rct: number;
-  delta_capacity: number;
+  peak_voltage?: number;
+  min_voltage?: number;
+  avg_current?: number;
+  avg_temp?: number;
+  temp_rise?: number;
+  cycle_duration?: number;
+  Re?: number;
+  Rct?: number;
+  delta_capacity?: number;
+  prior_equivalent_full_cycles?: number;
+  segment_duration_s?: number;
+  segment_energy_wh?: number;
+  voltage_start_v?: number;
+  voltage_end_v?: number;
+  voltage_mean_v?: number;
+  voltage_std_v?: number;
+  voltage_linear_slope_v_per_s?: number;
+  voltage_curvature?: number;
+  current_mean_c_rate?: number;
+  current_std_c_rate?: number;
+  temperature_mean_c?: number;
+  temperature_std_c?: number;
+  temperature_rise_c?: number;
+  temperature_slope_c_per_s?: number;
+  temperature_observed?: number;
   /** Optional model key, e.g. 'random_forest', 'tft', 'best_ensemble' */
   model_name?: string | null;
 }
@@ -142,6 +158,8 @@ export interface BatteryCapacity {
 export interface RecommendationResponse {
   battery_id: string;
   current_soh: number;
+  validation_status?: string;
+  disclaimer?: string;
   recommendations: {
     rank: number;
     ambient_temperature: number;
@@ -167,7 +185,7 @@ export const fetchBatteryCapacity = (id: string) =>
 export const predictSoh = (req: PredictRequest) =>
   api().post<PredictResponse>("/predict", req).then((r) => r.data);
 
-/** Best-ensemble prediction (RF + XGB + LGB weighted average, R²=0.957). */
+/** Legacy ensemble endpoint; v3 selection is reported from grouped validation. */
 export const predictEnsemble = (req: PredictRequest) =>
   api().post<PredictResponse>("/predict/ensemble", req).then((r) => r.data);
 
@@ -250,6 +268,8 @@ export interface SimulateResponse {
   time_unit_label: string;
   steps: number;
   model_used?: string;
+  validation_status?: string;
+  disclaimer?: string;
 }
 
 export const simulateBatteries = (req: SimulateRequest) =>

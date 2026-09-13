@@ -24,7 +24,6 @@ from sklearn.preprocessing import MinMaxScaler, StandardScaler
 from src.data.loader import ARTIFACTS_DIR
 
 SCALER_DIR = ARTIFACTS_DIR / "scalers"
-SCALER_DIR.mkdir(parents=True, exist_ok=True)
 
 
 # ── Train/test split by battery groups ───────────────────────────────────────
@@ -197,6 +196,7 @@ def fit_and_save_scaler(
     -------
     Fitted scaler object.
     """
+    SCALER_DIR.mkdir(parents=True, exist_ok=True)
     scaler = StandardScaler() if scaler_type == "standard" else MinMaxScaler()
     if isinstance(data, pd.DataFrame):
         data = data.values
@@ -230,6 +230,19 @@ FEATURE_COLS_SCALAR = [
     "Re",
     "Rct",
     "delta_capacity",
+]
+
+# Leakage-safe v3 inputs.  Kept here as an import-compatible alias for the
+# notebooks and training scripts that historically imported feature names from
+# this module.
+FEATURE_COLS_V3 = [
+    "cycle_index", "prior_equivalent_full_cycles", "ambient_temperature",
+    "segment_duration_s", "segment_energy_wh", "voltage_start_v",
+    "voltage_end_v", "voltage_mean_v", "voltage_std_v",
+    "voltage_linear_slope_v_per_s", "voltage_curvature",
+    "current_mean_c_rate", "current_std_c_rate", "temperature_mean_c",
+    "temperature_std_c", "temperature_rise_c",
+    "temperature_slope_c_per_s", "temperature_observed",
 ]
 
 TARGET_SOH = "SoH"

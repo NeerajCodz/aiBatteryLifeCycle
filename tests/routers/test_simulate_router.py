@@ -1,45 +1,8 @@
 from __future__ import annotations
 
 import numpy as np
-import pytest
-
 from api.routers import simulate
 from api.routers.simulate import BatterySimConfig, SimulateRequest
-
-
-class StubSimRegistry:
-    def __init__(self):
-        self.default_model = "xgboost"
-        self.feature_cols = [
-            "cycle_number",
-            "ambient_temperature",
-            "peak_voltage",
-            "min_voltage",
-            "voltage_range",
-            "avg_current",
-            "avg_temp",
-            "temp_rise",
-            "cycle_duration",
-            "Re",
-            "Rct",
-            "delta_capacity",
-        ]
-        self.model_meta = {
-            "xgboost": {"family": "classical", "requires_scaling": False},
-            "best_ensemble": {"components": ["xgboost"]},
-        }
-        self.models = {"xgboost": object(), "best_ensemble": object()}
-
-    def predict_array(self, X, model_name=None):
-        n = X.shape[0]
-        return np.clip(np.linspace(95.0, 85.0, n), 0, 100), (model_name or "xgboost")
-
-
-@pytest.fixture
-def stubbed_registry(monkeypatch):
-    reg = StubSimRegistry()
-    monkeypatch.setattr(simulate, "registry_v2", reg)
-    return reg
 
 
 def test_simulation_helper_vec_classify():
@@ -71,7 +34,7 @@ def test_simulation_compute_rul_and_eol_cycle_unit():
     assert rul_time.shape == (4,)
 
 
-def test_simulate_batteries_basic(stubbed_registry, run_async):
+def test_simulate_batteries_basic(run_async):
     req = SimulateRequest(
         batteries=[
             BatterySimConfig(
@@ -88,10 +51,11 @@ def test_simulate_batteries_basic(stubbed_registry, run_async):
     assert resp.steps == 5
     assert len(resp.results) == 1
     assert len(resp.results[0].soh_history) == 5
-    assert resp.model_used in ("xgboost", "best_ensemble", "linear_fallback")
+    assert resp.model_used == "exploratory_physics_prototype"
+    assert resp.validation_status == "exploratory_prototype"
 
 
-def test_simulate_invalid_time_unit_falls_back(stubbed_registry, run_async):
+def test_simulate_invalid_time_unit_falls_back(run_async):
     req = SimulateRequest(
         batteries=[BatterySimConfig(battery_id="B0006")],
         steps=2,

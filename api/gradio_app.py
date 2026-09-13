@@ -1,75 +1,70 @@
-"""
-api.gradio_app
-==============
-Gradio interface for interactive battery SOH / RUL prediction.
-Mounted at /gradio inside the FastAPI application.
-"""
+"""Compact Gradio client for the leakage-safe v3 SOH estimator."""
 
 from __future__ import annotations
 
 import gradio as gr
-import numpy as np
-import pandas as pd
 import plotly.graph_objects as go
 
-from api.model_registry import registry, classify_degradation, soh_to_color
+from api.model_registry import registry, soh_to_color
 
-# ── Prediction function ──────────────────────────────────────────────────────
+
 def predict_soh(
     cycle_number: int,
+    prior_efc: float,
     ambient_temperature: float,
-    peak_voltage: float,
-    min_voltage: float,
-    avg_current: float,
-    avg_temp: float,
-    temp_rise: float,
-    cycle_duration: float,
-    Re: float,
-    Rct: float,
-    delta_capacity: float,
+    segment_duration_s: float,
+    segment_energy_wh: float,
+    voltage_start_v: float,
+    voltage_end_v: float,
+    voltage_mean_v: float,
+    voltage_std_v: float,
+    voltage_slope: float,
+    voltage_curvature: float,
+    current_mean_c_rate: float,
+    current_std_c_rate: float,
+    temperature_mean_c: float,
+    temperature_std_c: float,
+    temperature_rise_c: float,
+    temperature_slope: float,
+    temperature_observed: bool,
     model_name: str,
 ):
+    """Estimate SOH from one observable partial-discharge segment."""
     features = {
-        "cycle_number": cycle_number,
+        "cycle_index": int(cycle_number) - 1,
+        "prior_equivalent_full_cycles": prior_efc,
         "ambient_temperature": ambient_temperature,
-        "peak_voltage": peak_voltage,
-        "min_voltage": min_voltage,
-        "voltage_range": peak_voltage - min_voltage,
-        "avg_current": avg_current,
-        "avg_temp": avg_temp,
-        "temp_rise": temp_rise,
-        "cycle_duration": cycle_duration,
-        "Re": Re,
-        "Rct": Rct,
-        "delta_capacity": delta_capacity,
+        "segment_duration_s": segment_duration_s,
+        "segment_energy_wh": segment_energy_wh,
+        "voltage_start_v": voltage_start_v,
+        "voltage_end_v": voltage_end_v,
+        "voltage_mean_v": voltage_mean_v,
+        "voltage_std_v": voltage_std_v,
+        "voltage_linear_slope_v_per_s": voltage_slope,
+        "voltage_curvature": voltage_curvature,
+        "current_mean_c_rate": current_mean_c_rate,
+        "current_std_c_rate": current_std_c_rate,
+        "temperature_mean_c": temperature_mean_c,
+        "temperature_std_c": temperature_std_c,
+        "temperature_rise_c": temperature_rise_c,
+        "temperature_slope_c_per_s": temperature_slope,
+        "temperature_observed": float(temperature_observed),
     }
-
     name = model_name if model_name != "auto" else None
     result = registry.predict(features, model_name=name)
-
     soh = result["soh_pct"]
-    rul = result["rul_cycles"]
-    state = result["degradation_state"]
-    model_used = result["model_used"]
-    ci_lo = result.get("confidence_lower", soh - 2)
-    ci_hi = result.get("confidence_upper", soh + 2)
-
-    # Summary text
     summary = (
-        f"## Prediction Result\n\n"
+        "## Current-cycle SOH estimate\n\n"
         f"- **SOH:** {soh:.1f}%\n"
-        f"- **RUL:** {rul:.0f} cycles\n"
-        f"- **State:** {state}\n"
-        f"- **95% CI:** [{ci_lo:.1f}%, {ci_hi:.1f}%]\n"
-        f"- **Model:** {model_used}\n"
+        f"- **State:** {result['degradation_state']}\n"
+        f"- **Model:** {result['model_used']}\n\n"
+        "No v3 RUL, confidence interval, charging benefit, or safety claim is "
+        "produced. This laboratory-data model is a research prototype."
     )
-
-    # SOH gauge figure
-    fig = go.Figure(go.Indicator(
-        mode="gauge+number+delta",
+    figure = go.Figure(go.Indicator(
+        mode="gauge+number",
         value=soh,
         title={"text": "State of Health (%)"},
-        delta={"reference": 100, "decreasing": {"color": "red"}},
         gauge={
             "axis": {"range": [0, 100]},
             "bar": {"color": soh_to_color(soh)},
@@ -79,111 +74,60 @@ def predict_soh(
                 {"range": [80, 90], "color": "#fef9c3"},
                 {"range": [90, 100], "color": "#dcfce7"},
             ],
-            "threshold": {
-                "line": {"color": "red", "width": 3},
-                "thickness": 0.75,
-                "value": 70,
-            },
         },
     ))
-    fig.update_layout(height=350)
-
-    return summary, fig
-
-
-# ── Capacity trajectory ──────────────────────────────────────────────────────
-def plot_capacity_trajectory(battery_id: str):
-    from pathlib import Path
-    meta_path = Path(__file__).resolve().parents[1] / "cleaned_dataset" / "metadata.csv"
-    if not meta_path.exists():
-        return None
-    meta = pd.read_csv(meta_path)
-    sub = meta[meta["battery_id"] == battery_id].sort_values("start_time")
-    if sub.empty:
-        return None
-
-    caps = sub["Capacity"].dropna().values
-    cycles = np.arange(1, len(caps) + 1)
-    soh = (caps / 2.0) * 100
-
-    fig = go.Figure()
-    fig.add_trace(go.Scatter(
-        x=cycles, y=soh, mode="lines+markers",
-        marker=dict(size=3), line=dict(width=2),
-        name=battery_id,
-    ))
-    fig.add_hline(y=70, line_dash="dash", line_color="red",
-                  annotation_text="EOL (70%)")
-    fig.update_layout(
-        title=f"SOH Trajectory — {battery_id}",
-        xaxis_title="Cycle", yaxis_title="SOH (%)",
-        template="plotly_white", height=400,
-    )
-    return fig
+    figure.update_layout(height=350)
+    return summary, figure
 
 
-# ── Build Gradio app ─────────────────────────────────────────────────────────
 def create_gradio_app() -> gr.Blocks:
-    model_choices = ["auto"] + [m["name"] for m in registry.list_models()]
-
-    with gr.Blocks(
-        title="Battery Lifecycle Predictor",
-    ) as demo:
+    """Build the v3 partial-discharge form."""
+    model_choices = ["auto"] + [model["name"] for model in registry.list_models()]
+    with gr.Blocks(title="Leakage-safe battery SOH estimator") as demo:
         gr.Markdown(
-            "# AI Battery Lifecycle Predictor\n"
-            "Predict **State of Health (SOH)** and **Remaining Useful Life (RUL)** "
-            "using machine-learning models trained on the NASA PCoE Li-ion Battery Dataset."
+            "# Leakage-safe battery SOH estimator\n"
+            "Enter summaries from the **observable 4.0–3.6 V discharge segment**. "
+            "Full-cycle capacity and current-cycle SOH are intentionally absent."
         )
-
-        with gr.Tab("Predict"):
-            with gr.Row():
-                with gr.Column(scale=1):
-                    cycle_number = gr.Number(label="Cycle Number", value=100, precision=0)
-                    ambient_temp = gr.Slider(0, 60, value=24, label="Ambient Temperature (°C)")
-                    peak_v = gr.Number(label="Peak Voltage (V)", value=4.2)
-                    min_v = gr.Number(label="Min Voltage (V)", value=2.7)
-                    avg_curr = gr.Number(label="Avg Discharge Current (A)", value=2.0)
-                    avg_t = gr.Number(label="Avg Cell Temp (°C)", value=25.0)
-                    temp_rise = gr.Number(label="Temp Rise (°C)", value=3.0)
-                    duration = gr.Number(label="Cycle Duration (s)", value=3600)
-                    re = gr.Number(label="Re (Ω)", value=0.04)
-                    rct = gr.Number(label="Rct (Ω)", value=0.02)
-                    delta_cap = gr.Number(label="ΔCapacity (Ah)", value=-0.005)
-                    model_dd = gr.Dropdown(choices=model_choices, value="auto", label="Model")
-                    btn = gr.Button("Predict", variant="primary")
-
-                with gr.Column(scale=1):
-                    result_md = gr.Markdown()
-                    gauge = gr.Plot(label="SOH Gauge")
-
-            btn.click(
-                fn=predict_soh,
-                inputs=[cycle_number, ambient_temp, peak_v, min_v, avg_curr,
-                        avg_t, temp_rise, duration, re, rct, delta_cap, model_dd],
-                outputs=[result_md, gauge],
-            )
-
-        with gr.Tab("Battery Explorer"):
-            bid_input = gr.Textbox(label="Battery ID", value="B0005", placeholder="e.g., B0005")
-            explore_btn = gr.Button("Load Trajectory")
-            cap_plot = gr.Plot(label="Capacity Trajectory")
-            explore_btn.click(fn=plot_capacity_trajectory, inputs=[bid_input], outputs=[cap_plot])
-
-        with gr.Tab("About"):
-            gr.Markdown(
-                "## About\n\n"
-                "This application predicts Li-ion battery degradation using models trained on the "
-                "**NASA Prognostics Center of Excellence (PCoE)** Battery Dataset.\n\n"
-                "### Models\n"
-                "- Classical ML: Ridge, Lasso, ElasticNet, KNN, SVR, Random Forest, XGBoost, LightGBM\n"
-                "- Deep Learning: LSTM (4 variants), BatteryGPT, TFT, iTransformer (3 variants), VAE-LSTM\n"
-                "- Ensemble: Stacking, Weighted Average\n\n"
-                "### Dataset\n"
-                "- 36 Li-ion 18650 cells (nominal 2.0Ah)\n"
-                "- Charge/discharge/impedance cycles at three temperature regimes\n"
-                "- End-of-Life: 30% capacity fade (1.4Ah)\n\n"
-                "### Reference\n"
-                "B. Saha and K. Goebel (2007). *Battery Data Set*, NASA Prognostics Data Repository."
-            )
-
+        with gr.Row():
+            with gr.Column():
+                cycle = gr.Number(label="Cycle number (1-based)", value=100, precision=0)
+                prior = gr.Number(label="Prior equivalent full cycles", value=90)
+                ambient = gr.Number(label="Ambient temperature (°C)", value=24)
+                duration = gr.Number(label="Segment duration (s)", value=800)
+                energy = gr.Number(label="Segment energy (Wh)", value=0.9)
+                v_start = gr.Number(label="Voltage start (V)", value=4.0)
+                v_end = gr.Number(label="Voltage end (V)", value=3.6)
+                v_mean = gr.Number(label="Voltage mean (V)", value=3.8)
+                v_std = gr.Number(label="Voltage standard deviation (V)", value=0.1)
+            with gr.Column():
+                v_slope = gr.Number(label="Voltage slope (V/s)", value=-0.0005)
+                v_curve = gr.Number(label="Voltage curvature", value=0)
+                i_mean = gr.Number(label="Mean current (C-rate)", value=1.0)
+                i_std = gr.Number(label="Current standard deviation (C-rate)", value=0.02)
+                t_mean = gr.Number(label="Temperature mean (°C)", value=30)
+                t_std = gr.Number(label="Temperature standard deviation (°C)", value=2)
+                t_rise = gr.Number(label="Temperature rise (°C)", value=6)
+                t_slope = gr.Number(label="Temperature slope (°C/s)", value=0.007)
+                t_observed = gr.Checkbox(label="Temperature sensor observed", value=True)
+                model = gr.Dropdown(choices=model_choices, value="auto", label="Deployable v3 model")
+        button = gr.Button("Estimate current SOH", variant="primary")
+        with gr.Row():
+            result = gr.Markdown()
+            gauge = gr.Plot(label="SOH gauge")
+        button.click(
+            fn=predict_soh,
+            inputs=[
+                cycle, prior, ambient, duration, energy, v_start, v_end, v_mean,
+                v_std, v_slope, v_curve, i_mean, i_std, t_mean, t_std, t_rise,
+                t_slope, t_observed, model,
+            ],
+            outputs=[result, gauge],
+        )
+        gr.Markdown(
+            "### Scope\n"
+            "Research prototype only. The model was evaluated for current-cycle "
+            "SOH on NASA, CALCE, and Oxford laboratory datasets. It is not a "
+            "validated RUL estimator or charging-control policy."
+        )
     return demo

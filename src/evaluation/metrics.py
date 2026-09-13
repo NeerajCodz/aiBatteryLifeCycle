@@ -29,11 +29,13 @@ from sklearn.metrics import (
 def regression_metrics(
     y_true: np.ndarray,
     y_pred: np.ndarray,
+    n_predictors: int | None = None,
     prefix: str = "",
 ) -> dict[str, float]:
     """Compute full regression metric suite.
 
-    Returns dict with keys: MAE, MSE, RMSE, R2, MAPE
+    Values are expressed in SOH percentage points where applicable.  The
+    tolerance metric is absolute (percentage points), not relative percentage.
     """
     y_true = np.asarray(y_true).ravel()
     y_pred = np.asarray(y_pred).ravel()
@@ -41,16 +43,27 @@ def regression_metrics(
     mse = mean_squared_error(y_true, y_pred)
     rmse = np.sqrt(mse)
     r2 = r2_score(y_true, y_pred)
+    n = y_true.size
+    adjusted_r2 = (
+        1.0 - (1.0 - r2) * (n - 1) / (n - n_predictors - 1)
+        if n_predictors is not None and n > n_predictors + 1
+        else np.nan
+    )
     # MAPE — avoid division by zero
     mask = y_true != 0
     mape = np.mean(np.abs((y_true[mask] - y_pred[mask]) / y_true[mask])) * 100 if mask.any() else np.nan
     p = f"{prefix}_" if prefix else ""
     return {
-        f"{p}MAE": mae,
-        f"{p}MSE": mse,
-        f"{p}RMSE": rmse,
-        f"{p}R2": r2,
-        f"{p}MAPE": mape,
+        f"{p}mae": float(mae),
+        f"{p}mse": float(mse),
+        f"{p}rmse": float(rmse),
+        f"{p}r2": float(r2),
+        f"{p}adjusted_r2": float(adjusted_r2),
+        f"{p}mape": float(mape),
+        f"{p}median_absolute_error": float(np.median(np.abs(y_true - y_pred))),
+        f"{p}p95_absolute_error": float(np.percentile(np.abs(y_true - y_pred), 95)),
+        f"{p}bias": float(np.mean(y_pred - y_true)),
+        f"{p}within_5pp": tolerance_accuracy(y_true, y_pred, tolerance=5.0),
     }
 
 
@@ -127,4 +140,7 @@ def build_summary_table(
         row = {"model": name}
         row.update(metrics)
         rows.append(row)
-    return pd.DataFrame(rows).set_index("model")
+    table = pd.DataFrame(rows).set_index("model")
+    aliases = {"MAE": "mae", "MSE": "mse", "RMSE": "rmse", "R2": "r2", "MAPE": "mape"}
+    table = table.rename(columns={old: new for old, new in aliases.items() if old in table.columns and new not in table.columns})
+    return table

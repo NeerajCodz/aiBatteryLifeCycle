@@ -301,6 +301,10 @@ export default function RecommendationPanel({ apiVersion, onApiVersionChange }: 
       {/* Results */}
       {result && (
         <div className="space-y-5">
+          <div className="flex items-start gap-2 rounded-lg border border-amber-700 bg-amber-950/30 p-3 text-sm text-amber-200">
+            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+            <span>{result.disclaimer ?? "Exploratory prototype only; not validated for operational control."}</span>
+          </div>
           {/* Summary cards */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
             <div className="bg-gray-900 rounded-xl p-4 border border-green-800/40">

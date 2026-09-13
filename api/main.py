@@ -3,14 +3,8 @@ api.main
 ========
 FastAPI application entry-point for the AI Battery Lifecycle Predictor.
 
-Architecture
-------------
-- **v1 (Classical)**    : Ridge, Lasso, ElasticNet, KNN ×3, SVR,
-                          Random Forest, XGBoost, LightGBM
-- **v2 (Deep)**         : Vanilla LSTM, BiLSTM, GRU, Attention LSTM,
-                          BatteryGPT, TFT, iTransformer ×3, VAE-LSTM
-- **v2.6 (Ensemble)**   : BestEnsemble — weighted average of RF + XGB + LGB
-                          (weights proportional to R²)
+The reviewer-revision v3 estimates current-cycle SOH from an observable
+4.0–3.6 V partial discharge. v1 and v2 remain explicit legacy APIs only.
 
 Mounted routes
 --------------
@@ -20,11 +14,10 @@ Mounted routes
 
 Key endpoints
 -------------
-- ``POST /api/predict``          — single-cycle SOH + RUL prediction
-- ``POST /api/predict/ensemble`` — always uses BestEnsemble (v2.6)
-- ``POST /api/predict/batch``    — batch prediction from JSON array
-- ``GET  /api/models``           — list all models with version / R² metadata
-- ``GET  /api/models/versions``  — group models by generation (v1/v2)
+- ``POST /api/predict``          — unversioned alias for v3 current-cycle SOH
+- ``POST /api/predict/batch``    — validated v3 batch prediction
+- ``POST /api/v3/predict``       — explicit reviewer-revision endpoint
+- ``GET  /api/models``           — list deployable v3 models and metrics
 - ``GET  /health``               — liveness probe
 
 Run locally
@@ -100,8 +93,8 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title="AI Battery Lifecycle Predictor",
     description=(
-        "Predict SOH, RUL, and degradation state of Li-ion batteries "
-        "using models trained on the NASA PCoE dataset."
+        "Estimate current-cycle lithium-ion battery SOH from a leakage-safe "
+        "partial-discharge contract. Research prototype; no validated RUL or control claim."
     ),
     version=__version__,
     lifespan=lifespan,
@@ -394,11 +387,11 @@ from api.routers.predict_v3 import router as predict_v3_router
 from api.routers.visualize import router as viz_router
 from api.routers.simulate import router as simulate_router
 
-app.include_router(predict_router)    # /api/* (default, uses v2 registry)
+app.include_router(predict_router)    # /api/* (default alias of leakage-safe v3)
 app.include_router(v1_router)         # /api/v1/* (legacy v1 models)
 app.include_router(predict_v2_router) # /api/v2/* (v2 models)
-app.include_router(predict_v3_router) # /api/v3/* (v3 models, best accuracy)
-app.include_router(simulate_router)   # /api/v3/simulate (ML-driven simulation)
+app.include_router(predict_v3_router) # /api/v3/* (reviewer-revision SOH models)
+app.include_router(simulate_router)   # /api/v3/simulate (exploratory prototype)
 app.include_router(viz_router)
 
 

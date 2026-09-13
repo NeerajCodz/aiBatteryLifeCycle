@@ -36,5 +36,10 @@ Thumbs.db
 cleaned_dataset/data/
 cleaned_dataset/extra_infos/
 
+# Reproducible raw/processed multi-dataset benchmark cache. Source URLs and
+# checksums are tracked in datasets/SOURCES.md; downloaded content is not.
+datasets/raw/
+datasets/processed/
+
 # Reference notebooks (not our work)
 reference/

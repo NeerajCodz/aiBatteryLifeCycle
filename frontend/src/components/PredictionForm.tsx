@@ -17,6 +17,29 @@ const DEFAULTS: PredictRequest = {
   model_name: null,
 };
 
+const V3_DEFAULTS: PredictRequest = {
+  battery_id: "example-cell",
+  cycle_number: 100,
+  prior_equivalent_full_cycles: 100,
+  ambient_temperature: 24,
+  segment_duration_s: 820,
+  segment_energy_wh: 0.95,
+  voltage_start_v: 4.0,
+  voltage_end_v: 3.6,
+  voltage_mean_v: 3.79,
+  voltage_std_v: 0.11,
+  voltage_linear_slope_v_per_s: -0.00049,
+  voltage_curvature: -0.000001,
+  current_mean_c_rate: 1.0,
+  current_std_c_rate: 0.03,
+  temperature_mean_c: 31,
+  temperature_std_c: 2.1,
+  temperature_rise_c: 6.2,
+  temperature_slope_c_per_s: 0.007,
+  temperature_observed: 1,
+  model_name: null,
+};
+
 /** Colour coding for model family badges */
 const familyColour = (family: string) => {
   switch (family) {
@@ -33,7 +56,7 @@ type Props = {
 };
 
 export default function PredictionForm({ apiVersion }: Props) {
-  const [form, setForm] = useState<PredictRequest>(DEFAULTS);
+  const [form, setForm] = useState<PredictRequest>(apiVersion === "v3" ? V3_DEFAULTS : DEFAULTS);
   const [models, setModels] = useState<ModelInfo[]>([]);
   const [result, setResult] = useState<PredictResponse | null>(null);
   const [loading, setLoading] = useState(false);
@@ -41,6 +64,7 @@ export default function PredictionForm({ apiVersion }: Props) {
 
   // Load available models on mount
   useEffect(() => {
+    setForm(apiVersion === "v3" ? V3_DEFAULTS : DEFAULTS);
     fetchModels()
       .then((ms) => {
         // Loaded-only list for stable UX
@@ -103,6 +127,27 @@ export default function PredictionForm({ apiVersion }: Props) {
     { key: "delta_capacity",      label: "ΔCapacity (Ah)",    step: "0.001" },
   ];
 
+  const v3NumericFields: { key: keyof PredictRequest; label: string; step?: string }[] = [
+    { key: "cycle_number", label: "Cycle number (1-based)", step: "1" },
+    { key: "prior_equivalent_full_cycles", label: "Prior equivalent full cycles", step: "0.1" },
+    { key: "ambient_temperature", label: "Ambient temp (°C)", step: "0.1" },
+    { key: "segment_duration_s", label: "4.0–3.6 V duration (s)", step: "0.1" },
+    { key: "segment_energy_wh", label: "Segment energy (Wh)", step: "0.001" },
+    { key: "voltage_start_v", label: "Start voltage (V)", step: "0.001" },
+    { key: "voltage_end_v", label: "End voltage (V)", step: "0.001" },
+    { key: "voltage_mean_v", label: "Mean voltage (V)", step: "0.001" },
+    { key: "voltage_std_v", label: "Voltage SD (V)", step: "0.001" },
+    { key: "voltage_linear_slope_v_per_s", label: "Voltage slope (V/s)", step: "0.000001" },
+    { key: "voltage_curvature", label: "Voltage curvature", step: "0.000001" },
+    { key: "current_mean_c_rate", label: "Mean current (C-rate)", step: "0.01" },
+    { key: "current_std_c_rate", label: "Current SD (C-rate)", step: "0.01" },
+    { key: "temperature_mean_c", label: "Mean cell temp (°C)", step: "0.1" },
+    { key: "temperature_std_c", label: "Cell temp SD (°C)", step: "0.1" },
+    { key: "temperature_rise_c", label: "Temperature rise (°C)", step: "0.1" },
+    { key: "temperature_slope_c_per_s", label: "Temperature slope (°C/s)", step: "0.0001" },
+    { key: "temperature_observed", label: "Temperature observed (0/1)", step: "1" },
+  ];
+
   // Find info for the currently selected model
   const selectedModel = models.find(
     (m) => m.name === (form.model_name ?? models.find((x) => x.is_default)?.name)
@@ -163,7 +208,7 @@ export default function PredictionForm({ apiVersion }: Props) {
 
         {/* Numeric feature inputs */}
         <div className="grid grid-cols-2 gap-3">
-          {numericFields.map((f) => (
+          {(apiVersion === "v3" ? v3NumericFields : numericFields).map((f) => (
             <div key={f.key}>
               <label className="block text-xs text-gray-400 mb-1">{f.label}</label>
               <input
@@ -176,6 +221,12 @@ export default function PredictionForm({ apiVersion }: Props) {
             </div>
           ))}
         </div>
+
+        {apiVersion === "v3" && (
+          <p className="text-xs text-gray-500">
+            v3 accepts only measurements available inside the current discharge's 4.0–3.6 V window. C-rate and prior EFC use public rated capacity; full-cycle measured capacity and current-cycle SOH are never inputs.
+          </p>
+        )}
 
         <button
           onClick={handleSubmit}

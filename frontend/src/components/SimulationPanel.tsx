@@ -3,7 +3,7 @@
  *
  * Workflow:
  *  1. User configures batteries & parameters
- *  2. Click "Run Simulation" → POST /api/v2/simulate (or local physics fallback)
+ *  2. Click "Run Simulation" → POST /api/v3/simulate (exploratory physics)
  *  3. Full trajectories returned for ALL batteries at once
  *  4. Timer ticks advance playIndex through pre-computed data
  *  5. All charts + 3D view re-render from pre-computed histories[playIndex]
@@ -24,7 +24,7 @@ import {
   Play, Pause, SkipBack, SkipForward, RotateCcw, FastForward,
   Plus, Trash2, Settings2, Pencil, ChevronRight,
   BatteryFull, BatteryLow, Activity, Zap,
-  Thermometer, TrendingDown, AlertOctagon, Clock,
+  Thermometer, TrendingDown, AlertOctagon, AlertTriangle, Clock,
   BarChart3, GitBranch, Layers, Gauge, Cpu,
   TableProperties, ScrollText, CheckCircle2, WifiOff,
   Server, FlaskConical, Copy, Download,
@@ -732,7 +732,7 @@ export default function SimulationPanel() {
         time_unit: timeUnit,
         eol_threshold: eolThreshold,
         model_name: selectedModel,
-        use_ml: true,
+        use_ml: false,
       });
       setResults(resp.results);
       setTimeUnitLabel(resp.time_unit_label);
@@ -1051,12 +1051,13 @@ export default function SimulationPanel() {
             </div>
           </div>
 
-          {/* ML Model */}
+          {/* Reference SOH model. Future-life simulation deliberately does not invoke it. */}
           <div>
-            <label className="block text-xs text-gray-400 mb-1 font-medium">ML Model</label>
+            <label className="block text-xs text-gray-400 mb-1 font-medium">SOH Model (reference only)</label>
             <select
               value={selectedModel}
               onChange={(e) => setSelectedModel(e.target.value)}
+              disabled
               className="bg-gray-800 border border-gray-700 rounded-lg px-3 py-1.5 text-sm text-white focus:outline-none focus:ring-1 focus:ring-green-500"
             >
               {loadedModels.length === 0 && (
@@ -1092,6 +1093,10 @@ export default function SimulationPanel() {
               )}
             </button>
           </div>
+        </div>
+        <div className="mx-4 mb-3 flex items-start gap-2 rounded-lg border border-amber-700 bg-amber-950/30 p-3 text-xs text-amber-200">
+          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+          Exploratory physics trajectory only. The v3 model estimates current-cycle SOH and is not validated for future-life forecasting or control.
         </div>
       </div>
 
