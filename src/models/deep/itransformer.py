@@ -21,6 +21,11 @@ import tensorflow as tf
 from tensorflow import keras
 from tensorflow.keras import layers
 
+from src.utils.config import SEQUENCE_FEATURE_COLS_V3
+
+
+CURRENT_CHANNEL_INDEX = SEQUENCE_FEATURE_COLS_V3.index("current_c_rate")
+
 
 # ═════════════════════════════════════════════════════════════════════════════
 # Building blocks
@@ -167,7 +172,7 @@ def build_physics_itransformer(
     soh_ml = layers.Dense(1, name="soh_ml")(x)
 
     # ── Physics Branch ───────────────────────────
-    # Extract current feature (index 1) → abs cumulative sum
+    # Extract the current C-rate channel from the authoritative v3 contract.
     current = AbsCumCurrentLayer(name="abs_cum_current")(inputs)
     p = layers.GlobalAveragePooling1D(name="phy_gap")(current)
     p = layers.Dense(64, activation="relu", name="phy_fc1")(p)
@@ -175,14 +180,16 @@ def build_physics_itransformer(
     soh_phy = layers.Dense(1, name="soh_phy")(p)
 
     model = keras.Model(inputs, [soh_ml, soh_phy], name="PhysicsInformed_iTransformer")
+    model.physics_loss_weight = float(lambda_phy)
     return model
 
 
 class AbsCumCurrentLayer(layers.Layer):
-    """Extracts current feature (index 1) and computes abs cumulative sum."""
+    """Extract current C-rate and compute its absolute cumulative sum."""
 
     def call(self, x, training=False):
-        return tf.abs(tf.cumsum(x[:, :, 1:2], axis=1))
+        start = CURRENT_CHANNEL_INDEX
+        return tf.abs(tf.cumsum(x[:, :, start : start + 1], axis=1))
 
     def get_config(self):
         return super().get_config()

@@ -103,9 +103,18 @@ def test_registry_predict_falls_back_to_default():
     reg._catalog = {"xgboost": {"version": "3.0.0"}}
     reg.model_meta = {"xgboost": {"family": "classical", "version": "3.0.0"}}
 
-    out = reg.predict({"cycle_number": 10}, model_name="missing")
+    out = reg.predict({column: 1.0 for column in reg.feature_cols}, model_name="missing")
     assert out["model_used"] == "xgboost"
     assert out["model_version"] == "3.0.0"
+    assert out["rul_cycles"] is None
+    assert out["confidence_lower"] is None
+
+
+def test_v3_registry_rejects_missing_features():
+    reg = mr.ModelRegistry(version="v3")
+    reg.default_model = "placeholder"
+    with pytest.raises(ValueError, match="Missing required v3 features"):
+        reg.predict({"cycle_index": 1.0})
 
 
 def test_registry_predict_array_best_ensemble_weighted():

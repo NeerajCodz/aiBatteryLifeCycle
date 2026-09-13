@@ -9,207 +9,116 @@ app_port: 7860
 license: mit
 ---
 
-# AI Battery Lifecycle Predictor
+# Leakage-Aware Lithium-Ion Battery SOH Estimation
 
-**IEEE Research-Grade** machine-learning system for predicting Li-ion battery
-**State of Health (SOH)**, **Remaining Useful Life (RUL)**, and **degradation state**,
-with an operational **recommendation engine** for lifecycle optimization.
+This repository contains the reproducible code, notebooks, API, and web demo for
+current-cycle state-of-health (SOH) estimation from the observable 4.0–3.6 V
+portion of a discharge. It is the canonical source repository for the paper
+revision; the Hugging Face Space is a deployment remote and the separate model
+repository stores release artifacts.
 
-Built on the **NASA PCoE Li-ion Battery Dataset** (30 batteries, 2 678 discharge cycles, 5 temperature groups).
+The 2026 reviewer revision replaces the former v3 experiment because it used
+current-cycle capacity-derived predictors. Those fields made the reported score
+look much better than performance on a genuinely unseen battery. The new v3
+contract excludes full-cycle capacity, current-cycle SOH, rolling SOH, and all
+other target proxies from model inputs.
 
----
+## Reproducible benchmark
 
-## Key Results (v2 — Intra-Battery Chronological Split)
+- Target: current-cycle SOH, `100 × full-cycle capacity / robust initial capacity`.
+- Inputs: 18 scalar summaries or a 64 × 5 sequence from the current discharge's
+  4.0–3.6 V window; full-cycle capacity is retained only as the label.
+- C-rate and prior equivalent-full-cycle inputs use public rated capacity
+  (NASA 2.0 Ah, CALCE 1.1 Ah, Oxford 0.74 Ah), never a measured target capacity.
+- Internal validation: disjoint train, validation, and test batteries; five
+  grouped folds where the dataset has at least five cells; seeds 17, 42, 2026.
+- External validation: NASA-trained frozen models evaluated zero-shot on CALCE
+  and Oxford, plus grouped within-dataset cross-validation on each external set.
+- Metrics: MAE, RMSE, MAPE, R², adjusted R², residual diagnostics, absolute
+  ±5-SOH-percentage-point coverage, per-battery scores, 10,000-draw
+  battery-cluster bootstrap intervals, and paired Wilcoxon–Holm tests.
+- Model registry: exactly 20 evaluated entries—8 classical regressors, 10
+  sequence architectures, and 2 leakage-safe ensembles.
 
-| Rank | Model | R² | MAE (%) | Within ±5% |
-|------|-------|----|---------|------------|
-| 1 | **ExtraTrees** | **0.975** | **0.84** | **99.3%** ✓ |
-| 2 | **SVR** | **0.974** | **0.87** | **99.3%** ✓ |
-| 3 | **GradientBoosting** | **0.958** | **1.12** | **98.5%** ✓ |
-| 4 | **RandomForest** | **0.952** | **1.34** | **96.7%** ✓ |
-| 5 | **LightGBM** | **0.948** | **1.51** | **96.0%** ✓ |
+After quality exclusions and partial-window eligibility checks, the normalized
+benchmark contains 2,141 NASA cycles from 30 batteries, 3,789 CALCE cycles from
+4 cells, and 519 Oxford records from 8 cells. Raw sources and SHA-256 digests are
+documented in `datasets/SOURCES.md` and `datasets/checksums.sha256`.
 
-**All 5 classical ML models exceed the 95% accuracy gate.** 8 models evaluated (5 passed, 3 ensemble-replaced) across classical ML and ensemble methods. 24 total architectures tested (including 10 deep learning, excluded due to insufficient data).
+## Notebook order
 
-### v1 → v2 Improvements
-- **Split fix:** Cross-battery train-test split (data leakage) → intra-battery chronological 80/20 per-battery split
-- **Pass rate:** 41.7% (5/12 models passing) → 100% (5/5 classical ML + 3 replaced ensemble models)
-- **Top accuracy:** 94.2% → 99.3% (+5.1 pp)
-- **Bug fixes:** Removed avg_temp auto-correction; fixed recommendation baseline (0 cycles → 100-1000 cycles)
-- **New models:** ExtraTrees, GradientBoosting, Ensemble voting
-- **Versioned API:** `/api/v1/*` (frozen, legacy) and `/api/v2/*` (current, bug-fixed, served in parallel)
+Run the notebooks in numerical order. Each notebook declares its purpose,
+leakage rule, inputs, and saved outputs.
 
----
-
-## Highlights
-
-| Feature | Details |
-|---------|---------|
-| **Models (24)** | Ridge, Lasso, ElasticNet, KNN ×3, SVR, Random Forest, **ExtraTrees**, **GradientBoosting**, XGBoost, LightGBM, LSTM ×4, BatteryGPT, TFT, iTransformer ×3, VAE-LSTM, Stacking & Weighted Ensemble |
-| **Notebooks** | 9 research-grade Jupyter notebooks (EDA → Evaluation), fully executed |
-| **Frontend** | React + TypeScript + Three.js (3D battery pack heatmap), **v1/v2 toggle**, **Research Paper tab** |
-| **Backend** | FastAPI REST API + Gradio interactive UI, **versioned /api/v1/ & /api/v2/** |
-| **Deployment** | Single Docker container for Hugging Face Spaces |
-
----
-
-## Quick Start
-
-### 1. Clone & Setup
-
-```bash
-git clone <repo-url>
-cd aiBatteryLifecycle
-python -m venv venv
-# Windows
-.\venv\Scripts\activate
-# Linux/Mac
-source venv/bin/activate
-
-pip install -r requirements.txt
-pip install torch --index-url https://download.pytorch.org/whl/cu124
-pip install tensorflow
+```text
+00_environment.ipynb
+01_dataset_audit.ipynb
+02_feature_engineering.ipynb
+03_protocol_comparison.ipynb
+04_classical_ml.ipynb
+05_recurrent_models.ipynb
+06_transformer_models.ipynb
+07_graph_variational.ipynb
+08_ensembles.ipynb
+09_external_calce.ipynb
+10_external_oxford.ipynb
+11_stats_robustness.ipynb
+12_paper_outputs.ipynb
 ```
 
-### 2. Run Notebooks
+Machine-readable fold metrics and predictions are written under
+`artifacts/v3/results`; publication tables and 600-dpi/PDF/SVG figures are
+generated under `artifacts/v3/tables` and `artifacts/v3/figures`.
+
+## Setup and rerun
 
 ```bash
+python -m venv .venv
+.venv/Scripts/pip install -r requirements.txt
+.venv/Scripts/python scripts/data/download_benchmark_data.py
+.venv/Scripts/python scripts/data/build_benchmark_datasets.py
 jupyter lab notebooks/
 ```
 
-Execute notebooks `01_eda.ipynb` through `09_evaluation.ipynb` in order.
+The downloader uses only the official NASA PCoE, CALCE, and Oxford ORA sources
+listed in the provenance file. Do not commit the raw archives.
 
-### 3. Start the API
+## API contract
 
-```bash
-uvicorn api.main:app --host 0.0.0.0 --port 7860 --reload
-```
-
-- **API Docs:** http://localhost:7860/docs
-- **Gradio UI:** http://localhost:7860/gradio
-- **Health:** http://localhost:7860/health
-
-### 4. Start Frontend (Dev)
+`POST /api/v3/predict` accepts the same 18 leakage-safe partial-discharge
+features used by the tabular benchmark. It does not accept current-cycle
+capacity, SOH, or a capacity delta. The endpoint returns SOH only; the former
+heuristic RUL and fixed-width confidence values are intentionally not presented
+as validated v3 outputs. The v1/v2 routes remain for backward compatibility and
+are explicitly legacy.
 
 ```bash
-cd frontend
-npm install
-npm run dev
+uvicorn api.main:app --host 0.0.0.0 --port 7860
 ```
 
-Open http://localhost:5173
+Swagger documentation is available at `/docs`. The recommendation and
+multi-step simulation panels are exploratory prototypes; they are not validated
+battery-management control policies and must not be used for safety-critical
+operation.
 
-### 5. Docker
+## Repository layout
 
-```bash
-# Recommended — docker compose
-docker compose up --build
-
-# Or low-level
-docker build -t battery-predictor .
-docker run -p 7860:7860 -e LOG_LEVEL=INFO battery-predictor
+```text
+api/                 FastAPI routes and model registry
+datasets/            provenance and checksums (raw data ignored)
+frontend/            React demonstration interface
+notebooks/           ordered experimental record
+scripts/             download, evaluation, statistics, and figure entry points
+src/data/            dataset adapters and partial-cycle features
+src/evaluation/      metrics, grouped splits, bootstrap, statistical tests
+src/experiments/     tabular and sequence benchmark runners
+src/models/          20-model implementation catalog
+tests/               unit and integration checks
+artifacts/v3/         generated, machine-readable revision outputs
 ```
 
-Add `-v ./artifacts/logs:/app/artifacts/logs` to persist structured JSON logs.
+## Scope
 
----
-
-## Project Structure
-
-```
-aiBatteryLifecycle/
-├── cleaned_dataset/           # NASA PCoE dataset (142 CSVs + metadata)
-├── src/                       # Core ML library
-│   ├── data/                  # loader, features, preprocessing
-│   ├── models/
-│   │   ├── classical/         # Ridge, KNN, SVR, RF, XGB, LGBM
-│   │   ├── deep/              # LSTM, Transformer, iTransformer, VAE-LSTM
-│   │   └── ensemble/          # Stacking, Weighted Average
-│   ├── evaluation/            # metrics, recommendations
-│   └── utils/                 # config, plotting
-├── notebooks/                 # 01_eda → 09_evaluation
-├── api/                       # FastAPI backend + Gradio
-│   ├── main.py
-│   ├── schemas.py
-│   ├── model_registry.py
-│   ├── gradio_app.py
-│   └── routers/
-├── frontend/                  # Vite + React + Three.js
-│   └── src/components/        # Dashboard, 3D viz, Predict, etc.
-├── docs/                      # Documentation
-├── artifacts/                 # Generated: models, figures, scalers
-├── Dockerfile
-├── requirements.txt
-└── README.md
-```
-
----
-
-## Dataset
-
-**NASA Prognostics Center of Excellence (PCoE) Battery Dataset**
-
-- 30 Li-ion 18650 cells (B0005–B0056, after cleaning)
-- 2 678 discharge cycles extracted
-- Nominal capacity: 2.0 Ah
-- End-of-Life threshold: 1.4 Ah (30% fade)
-- Five temperature groups: 4°C, 22°C, 24°C, 43°C, 44°C
-- Cycle types: charge, discharge, impedance
-- 12 engineered features per cycle (voltage, current, temperature, impedance, duration)
-
-**Reference:** B. Saha and K. Goebel (2007). *Battery Data Set*, NASA Prognostics Data Repository.
-
----
-
-## Models
-
-### Classical ML
-- **Linear:** Ridge, Lasso, ElasticNet
-- **Instance-based:** KNN (3 configs)
-- **Kernel:** SVR (RBF)
-- **Tree ensemble:** Random Forest, **ExtraTrees** *(v2)*, **GradientBoosting** *(v2)*, XGBoost (Optuna HPO), LightGBM (Optuna HPO)
-
-### Deep Learning
-- **LSTM family:** Vanilla, Bidirectional, GRU, Attention LSTM (MC Dropout uncertainty)
-- **Transformer:** BatteryGPT (nano decoder-only), TFT (Temporal Fusion)
-- **iTransformer:** Vanilla, Physics-Informed (dual-head), Dynamic-Graph
-
-### Generative
-- **VAE-LSTM:** Variational autoencoder with LSTM encoder/decoder, health head, anomaly detection
-
-### Ensemble
-- **Stacking:** Out-of-fold + Ridge meta-learner
-- **Weighted Average:** L-BFGS-B optimized weights
-
----
-
-## API Endpoints
-
-| Method | Path | Description |
-|--------|------|-------------|
-| POST | `/api/predict` | Single-cycle SOH prediction (default: v2 models) |
-| POST | `/api/v1/predict` | Predict using v1 models (cross-battery split) |
-| POST | `/api/v2/predict` | Predict using v2 models (chrono split, bug-fixed) |
-| POST | `/api/predict/ensemble` | Always uses BestEnsemble |
-| POST | `/api/predict/batch` | Multi-cycle batch prediction |
-| POST | `/api/recommend` | Operational recommendations |
-| POST | `/api/v2/recommend` | v2 recommendations (fixed baseline) |
-| GET | `/api/models` | List all models with version / R² metadata |
-| GET | `/api/v1/models` | List v1 models |
-| GET | `/api/v2/models` | List v2 models |
-| GET | `/api/models/versions` | Group models by generation (v1 / v2) |
-| GET | `/api/dashboard` | Full dashboard data |
-| GET | `/api/batteries` | List all batteries |
-| GET | `/api/battery/{id}/capacity` | Per-battery capacity curve |
-| GET | `/api/figures` | List saved figures (PNG only) |
-| GET | `/api/figures/{name}` | Serve a figure |
-| GET | `/health` | Liveness probe |
-
-All endpoints are documented interactively at **`/docs`** (Swagger UI) and **`/redoc`**.
-
----
-
-## License
-
-This project is for academic and research purposes.
-Dataset: NASA PCoE public domain.
+This is a research prototype, not a certified battery-management system. The
+paper now frames charging recommendations as future decision-support research,
+not as a demonstrated deployment claim.

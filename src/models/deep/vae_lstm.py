@@ -8,7 +8,7 @@ Architecture:
 - Encoder: 2-layer bi-LSTM → μ and log-σ (latent dim)
 - Reparameterization: z = μ + ε·σ
 - Decoder: 2-layer LSTM → reconstruct input sequence
-- Health head: latent μ → MLP → SOH/RUL prediction
+- Health head: latent μ → MLP → current-cycle SOH estimate
 - Anomaly: cycles with reconstruction error > 3σ flagged
 
 Loss: L = L_recon + β·L_KL   (β annealed from 0→1 during training)

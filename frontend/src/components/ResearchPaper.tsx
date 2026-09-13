@@ -126,57 +126,28 @@ const mdComponents: React.ComponentProps<typeof ReactMarkdown>["components"] = {
 };
 
 // ── Fallback content when file not available ──────────────────────────────
-const FALLBACK = `# Comprehensive Multi-Model Approach to Lithium-Ion Battery State of Health Prediction
+const FALLBACK = `# Reviewer-revision study: battery SOH prediction
 
-**Authors:** Research Team | **Dataset:** NASA PCoE Battery Dataset
-
----
-
-## Abstract
-
-This work presents a comprehensive multi-model framework for predicting State of Health (SOH) and Remaining Useful Life (RUL) of lithium-ion batteries using the NASA Prognostics Center of Excellence (PCoE) dataset.
-
-We evaluate **12 classical machine learning models** (Ridge, Lasso, ElasticNet, KNN, SVR, Random Forest, ExtraTrees, GradientBoosting, XGBoost, LightGBM) alongside **deep learning architectures** (LSTM variants, Transformer, VAE-LSTM, iTransformer) using an intra-battery chronological split methodology that eliminates cross-battery data leakage.
+**Status:** Full benchmark rerun in progress. Final claims are generated from versioned artifacts after all validation stages complete.
 
 ---
 
-## Key Results
+## Evaluation contract
 
-| Model | R² | MAE (%) | RMSE | Within ±5% |
-|---|---|---|---|---|
-| ExtraTrees | **0.967** | **1.17** | 1.69 | 99.1% |
-| GradientBoosting | 0.961 | 1.28 | 1.81 | 98.4% |
-| Random Forest | 0.958 | 1.31 | 1.86 | 97.9% |
-| XGBoost (HPO) | 0.954 | 1.35 | 1.94 | 97.6% |
-| LightGBM (HPO) | 0.951 | 1.42 | 2.01 | 97.2% |
+- **Task:** current-cycle state-of-health (SOH) estimation; the deployed v3 interface does not claim remaining-useful-life prediction.
+- **Datasets:** NASA PCoE, CALCE, and Oxford Battery Degradation Dataset 1.
+- **Inputs:** 18 scalar predictors plus a 64-step, five-channel partial-discharge sequence sampled on the 4.0–3.6 V interval.
+- **Primary validation:** battery-grouped five-fold evaluation with seeds 17, 42, and 2026.
+- **External validation:** train on NASA, then evaluate without refitting on CALCE and Oxford.
+- **Metrics:** MAE, RMSE, R², adjusted R², ±5 percentage-point coverage, residual diagnostics, and bootstrap confidence intervals.
 
----
+## Leakage controls
 
-## Methodology
+SOH labels and target-derived quantities are excluded from model inputs. Capacity normalization, equivalent-full-cycle calculation, temperature availability, battery identity, and split membership are audited before training.
 
-### Dataset
+## Scope
 
-The NASA PCoE dataset comprises **30 Li-ion 18650 cells** (B0005–B0056, excluding B0049–B0052) tested under 5 temperature groups:
-
-- **4°C** — cold environment testing
-- **22°C** — room temperature
-- **24°C** — standard lab condition
-- **43°C** — elevated temperature stress
-- **44°C** — high temperature degradation
-
-### Feature Engineering
-
-Each battery contributes **12 per-cycle engineered features** including:
-
-- Electrochemical Impedance Spectroscopy (EIS) parameters: **Re** (electrolyte resistance) and **Rct** (charge-transfer resistance)
-- Voltage statistics (mean, std, min, max, range)
-- Temperature dynamics (ambient, mean cell temp)
-- Capacity delta per cycle
-- Cycle number and normalized age
-
-### Split Methodology
-
-> **Intra-battery chronological split** — for each battery, the first 70% of cycles are used for training, the remaining 30% for testing. This eliminates cross-battery data leakage that was present in the v1 group-based split.
+Charging recommendations and lifecycle simulations in the application are exploratory prototypes. They are not safety-certified controls and are not presented as validated deployment outcomes.
 `;
 
 // ── Component ─────────────────────────────────────────────────────────────
@@ -239,7 +210,7 @@ export default function ResearchPaper() {
               )}
             </div>
             <p className="text-sm text-gray-400 mt-0.5">
-              Multi-Model Battery Lifecycle Prediction using NASA PCoE Dataset
+              Leakage-safe SOH evaluation across NASA, CALCE, and Oxford datasets
             </p>
           </div>
           <a

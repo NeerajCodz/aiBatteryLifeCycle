@@ -1,7 +1,10 @@
 """
 src.models.classical.regressors
 ===============================
-Classical ML regression models for SOH and RUL prediction.
+Classical ML regressors.
+
+The reviewer-revision v3 contract uses these estimators for current-cycle SOH
+estimation only. Earlier versioned code may retain historical RUL interfaces.
 
 All models follow a unified interface:
     train_*(X_train, y_train, **kwargs) → fitted model
@@ -29,6 +32,7 @@ from src.utils.config import CV_FOLDS, MODELS_DIR, N_OPTUNA_TRIALS, RANDOM_STATE
 
 def _save_model(model: Any, name: str) -> None:
     path = MODELS_DIR / "classical" / f"{name}.joblib"
+    path.parent.mkdir(parents=True, exist_ok=True)
     joblib.dump(model, path)
 
 

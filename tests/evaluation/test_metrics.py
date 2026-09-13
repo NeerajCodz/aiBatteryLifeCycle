@@ -16,7 +16,11 @@ def test_regression_metrics_keys():
     y_true = np.array([1.0, 2.0, 3.0])
     y_pred = np.array([1.1, 1.9, 3.2])
     m = regression_metrics(y_true, y_pred, prefix="m")
-    assert {"m_MAE", "m_MSE", "m_RMSE", "m_R2", "m_MAPE"} <= set(m.keys())
+    assert {
+        "m_mae", "m_mse", "m_rmse", "m_r2", "m_adjusted_r2", "m_mape",
+        "m_median_absolute_error", "m_p95_absolute_error", "m_bias",
+        "m_within_5pp",
+    } <= set(m.keys())
 
 
 def test_tolerance_accuracy():
@@ -46,4 +50,4 @@ def test_per_battery_evaluation_skips_singletons():
 def test_build_summary_table():
     tbl = build_summary_table({"rf": {"MAE": 1.2}, "xgb": {"MAE": 1.0}})
     assert list(tbl.index) == ["rf", "xgb"]
-    assert "MAE" in tbl.columns
+    assert "mae" in tbl.columns

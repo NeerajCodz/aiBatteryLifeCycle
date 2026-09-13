@@ -27,6 +27,7 @@ DEGRADATION_LABELS = ["Healthy", "Aging", "Near-EOL", "EOL"]
 
 def _save_model(model: Any, name: str) -> None:
     path = MODELS_DIR / "classical" / f"{name}.joblib"
+    path.parent.mkdir(parents=True, exist_ok=True)
     joblib.dump(model, path)
 
 
