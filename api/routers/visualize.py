@@ -141,19 +141,25 @@ async def battery_capacity(battery_id: str):
 
 
 def _v3_inventory() -> pd.DataFrame:
-    """Load the retained v3 cycle inventories for NASA, CALCE and Oxford."""
+    """Load retained v3 cycle rows for NASA, CALCE and Oxford.
+
+    The per-dataset ``features.csv`` files are authoritative because they
+    contain the post-exclusion rows used by the deployed models.  The compact
+    ``*_inventory.csv`` files remain a fallback for lightweight installations.
+    """
     frames: list[pd.DataFrame] = []
     for dataset in ("nasa", "calce", "oxford"):
-        path = _ARTIFACTS / "v3" / "features" / f"{dataset}_inventory.csv"
+        features_path = _ARTIFACTS / "v3" / "features" / dataset / "features.csv"
+        inventory_path = _ARTIFACTS / "v3" / "features" / f"{dataset}_inventory.csv"
+        path = features_path if features_path.exists() else inventory_path
         if not path.exists():
             continue
         frame = pd.read_csv(path)
         if frame.empty:
             continue
         frame["dataset"] = frame.get("dataset", dataset).astype(str).str.upper()
-        frame["ambient_temperature"] = pd.to_numeric(
-            frame.get("ambient_temperature_c"), errors="coerce"
-        )
+        temp_column = "ambient_temperature" if "ambient_temperature" in frame.columns else "ambient_temperature_c"
+        frame["ambient_temperature"] = pd.to_numeric(frame.get(temp_column), errors="coerce")
         frame["capacity_ah"] = pd.to_numeric(frame.get("capacity_ah"), errors="coerce")
         frame["cycle_number"] = pd.to_numeric(frame.get("cycle_number"), errors="coerce")
         frames.append(frame)
