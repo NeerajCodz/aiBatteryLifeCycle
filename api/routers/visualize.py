@@ -53,6 +53,11 @@ _PAPER_TABLE_NAMES = {
     "table_10": "Table 10 | Bootstrap uncertainty intervals",
 }
 
+# v3 inventory files contain one row per retained discharge cycle across all
+# three datasets.  Keep the rated capacities here so the Analytics tab reports
+# dataset-normalised SOH rather than applying NASA's 2 Ah capacity everywhere.
+_V3_RATED_CAPACITY_AH = {"NASA": 2.0, "CALCE": 1.1, "OXFORD": 0.74}
+
 
 def _read_table_name(path: Path) -> str:
     stem = path.stem
@@ -133,6 +138,90 @@ async def battery_capacity(battery_id: str):
     cycles = list(range(1, len(caps) + 1))
     soh_list = [(float(c) / 2.0) * 100 for c in caps]
     return {"battery_id": battery_id, "cycles": cycles, "capacity_ah": caps, "soh_pct": soh_list}
+
+
+def _v3_inventory() -> pd.DataFrame:
+    """Load the retained v3 cycle inventories for NASA, CALCE and Oxford."""
+    frames: list[pd.DataFrame] = []
+    for dataset in ("nasa", "calce", "oxford"):
+        path = _ARTIFACTS / "v3" / "features" / f"{dataset}_inventory.csv"
+        if not path.exists():
+            continue
+        frame = pd.read_csv(path)
+        if frame.empty:
+            continue
+        frame["dataset"] = frame.get("dataset", dataset).astype(str).str.upper()
+        frame["ambient_temperature"] = pd.to_numeric(
+            frame.get("ambient_temperature_c"), errors="coerce"
+        )
+        frame["capacity_ah"] = pd.to_numeric(frame.get("capacity_ah"), errors="coerce")
+        frame["cycle_number"] = pd.to_numeric(frame.get("cycle_number"), errors="coerce")
+        frames.append(frame)
+    if not frames:
+        return pd.DataFrame()
+    return pd.concat(frames, ignore_index=True)
+
+
+@router.get("/{version}/batteries")
+async def list_version_batteries(version: str):
+    """Return version-aware battery summaries used by Analytics graphs."""
+    _ensure_version(version)
+    if version != "v3":
+        # Preserve the legacy NASA graph contract for versions without cycle
+        # inventory artifacts.
+        return await list_batteries()
+    inventory = _v3_inventory()
+    if inventory.empty:
+        return []
+    out: list[dict[str, Any]] = []
+    for (dataset, battery_id), sub in inventory.groupby(["dataset", "battery_id"], sort=True):
+        sub = sub.sort_values("cycle_number")
+        capacity = sub["capacity_ah"].dropna()
+        if capacity.empty:
+            continue
+        rated = _V3_RATED_CAPACITY_AH.get(str(dataset).upper())
+        if rated is None:
+            continue
+        last_capacity = float(capacity.iloc[-1])
+        soh = last_capacity / rated * 100.0
+        out.append({
+            "battery_id": str(battery_id),
+            "dataset": str(dataset).upper(),
+            "rated_capacity_ah": rated,
+            "n_cycles": int(len(sub)),
+            "last_capacity": round(last_capacity, 4),
+            "soh_pct": round(soh, 1),
+            "ambient_temperature": round(float(sub["ambient_temperature"].mean()), 1),
+        })
+    return out
+
+
+@router.get("/{version}/battery/{battery_id}/capacity")
+async def version_battery_capacity(version: str, battery_id: str):
+    """Return cycle-level v3 capacity/SOH values for any of the three datasets."""
+    _ensure_version(version)
+    if version != "v3":
+        return await battery_capacity(battery_id)
+    inventory = _v3_inventory()
+    if inventory.empty:
+        raise HTTPException(404, "v3 inventory not found")
+    sub = inventory[inventory["battery_id"].astype(str) == battery_id].sort_values("cycle_number")
+    if sub.empty:
+        raise HTTPException(404, f"Battery {battery_id} not found in v3 inventory")
+    dataset = str(sub.iloc[0]["dataset"]).upper()
+    rated = _V3_RATED_CAPACITY_AH.get(dataset)
+    if rated is None:
+        raise HTTPException(404, f"Unknown dataset for battery {battery_id}")
+    capacities = sub["capacity_ah"].dropna().astype(float).tolist()
+    cycles = sub.loc[sub["capacity_ah"].notna(), "cycle_number"].astype(int).tolist()
+    return {
+        "battery_id": battery_id,
+        "dataset": dataset,
+        "rated_capacity_ah": rated,
+        "cycles": cycles,
+        "capacity_ah": capacities,
+        "soh_pct": [round((value / rated) * 100.0, 4) for value in capacities],
+    }
 
 
 # ── Serve saved figures ──────────────────────────────────────────────────────

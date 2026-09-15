@@ -169,6 +169,8 @@ export interface DashboardData {
 
 export interface BatteryCapacity {
   battery_id: string;
+  dataset?: string;
+  rated_capacity_ah?: number;
   cycles: number[];
   capacity_ah: number[];
   soh_pct: number[];
@@ -200,6 +202,14 @@ export const fetchBatteries = () =>
 
 export const fetchBatteryCapacity = (id: string) =>
   baseApi.get<BatteryCapacity>(`/battery/${id}/capacity`).then((r) => r.data);
+
+/** Version-aware battery inventory for Analytics (v3 includes NASA, CALCE, Oxford). */
+export const fetchVersionBatteries = (version: "v1" | "v2" | "v3") =>
+  baseApi.get<any[]>(`/${version}/batteries`).then((r) => r.data);
+
+/** Version-aware cycle capacity/SOH series for Analytics. */
+export const fetchVersionBatteryCapacity = (version: "v1" | "v2" | "v3", id: string) =>
+  baseApi.get<BatteryCapacity>(`/${version}/battery/${encodeURIComponent(id)}/capacity`).then((r) => r.data);
 
 export const predictSoh = (req: PredictRequest) =>
   api().post<PredictResponse>("/predict", req).then((r) => r.data);

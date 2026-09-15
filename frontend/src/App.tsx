@@ -80,7 +80,7 @@ export default function App() {
       <main className="max-w-7xl mx-auto px-4 py-6">
         {activeTab === "simulation" && <SimulationPanel />}
         {activeTab === "predict" && <PredictionForm apiVersion={apiVersion} />}
-        {activeTab === "graphs" && <GraphPanel />}
+        {activeTab === "graphs" && <GraphPanel apiVersion={apiVersion} />}
         {activeTab === "recommend" && (
           <RecommendationPanel
             apiVersion={apiVersion}

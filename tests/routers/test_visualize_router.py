@@ -203,6 +203,33 @@ def test_dashboard_and_battery_endpoints(monkeypatch, tmp_path, run_async):
     assert len(batteries) == 2
 
 
+def test_v3_inventory_graph_endpoints_include_all_datasets(monkeypatch, tmp_path, run_async):
+    monkeypatch.setattr(visualize, "_ARTIFACTS", tmp_path)
+    inv = tmp_path / "v3" / "features"
+    inv.mkdir(parents=True)
+    for name, dataset, battery, rated in [
+        ("nasa", "NASA", "B1", 2.0),
+        ("calce", "CALCE", "C1", 1.1),
+        ("oxford", "Oxford", "O1", 0.74),
+    ]:
+        pd.DataFrame(
+            {
+                "dataset": [dataset, dataset],
+                "battery_id": [battery, battery],
+                "cycle_number": [0, 1],
+                "capacity_ah": [rated, rated * 0.8],
+                "ambient_temperature_c": [25, 26],
+            }
+        ).to_csv(inv / f"{name}_inventory.csv", index=False)
+
+    batteries = run_async(visualize.list_version_batteries("v3"))
+    assert {row["dataset"] for row in batteries} == {"NASA", "CALCE", "OXFORD"}
+    assert {row["battery_id"] for row in batteries} == {"B1", "C1", "O1"}
+    oxford = run_async(visualize.version_battery_capacity("v3", "O1"))
+    assert oxford["dataset"] == "OXFORD"
+    assert oxford["soh_pct"][-1] == pytest.approx(80.0)
+
+
 def test_figure_listing_and_get_figure(monkeypatch, tmp_path, run_async):
     fig_dir = tmp_path / "figures"
     fig_dir.mkdir(parents=True)
