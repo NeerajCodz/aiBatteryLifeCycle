@@ -71,19 +71,28 @@ def _ensemble_predictions(
     val_predictions: dict[str, np.ndarray],
     test_predictions: dict[str, np.ndarray],
     y_val: np.ndarray,
-) -> dict[str, np.ndarray]:
+    train_predictions: dict[str, np.ndarray],
+) -> tuple[dict[str, np.ndarray], dict[str, np.ndarray]]:
     names = list(val_predictions)
     val_matrix = np.column_stack([val_predictions[name] for name in names])
     test_matrix = np.column_stack([test_predictions[name] for name in names])
+    train_matrix = np.column_stack([train_predictions[name] for name in names])
     errors = np.mean(np.abs(val_matrix - y_val[:, None]), axis=0)
     inverse = 1.0 / np.maximum(errors, 1e-8)
     weights = inverse / inverse.sum()
     meta = TransformedTargetRegressor(regressor=Ridge(alpha=1.0))
     meta.fit(val_matrix, y_val)
-    return {
+    test_ensembles = {
         "stacking_ensemble": meta.predict(test_matrix),
         "weighted_ensemble": test_matrix @ weights,
     }
+    # These are in-sample base-model diagnostics, not a second model-selection
+    # criterion. The ensemble weights and meta-model still use validation data.
+    train_ensembles = {
+        "stacking_ensemble": meta.predict(train_matrix),
+        "weighted_ensemble": train_matrix @ weights,
+    }
+    return test_ensembles, train_ensembles
 
 
 def run_grouped_tabular_benchmark(
@@ -111,6 +120,7 @@ def run_grouped_tabular_benchmark(
             factories = classical_factories(seed)
             val_predictions: dict[str, np.ndarray] = {}
             test_predictions: dict[str, np.ndarray] = {}
+            train_predictions: dict[str, np.ndarray] = {}
             for model_id, factory in factories.items():
                 model = factory()
                 model.fit(X[train_idx], y[train_idx])
@@ -118,6 +128,7 @@ def run_grouped_tabular_benchmark(
                 test_pred = model.predict(X[test_idx])
                 test_predictions[model_id] = test_pred
                 train_pred = model.predict(X[train_idx])
+                train_predictions[model_id] = train_pred
                 metrics = regression_metrics(y[test_idx], test_pred, n_predictors=len(feature_cols))
                 train_metrics = regression_metrics(y[train_idx], train_pred, n_predictors=len(feature_cols))
                 metric_rows.append({
@@ -126,16 +137,21 @@ def run_grouped_tabular_benchmark(
                     "train_mae": train_metrics["mae"],
                     "generalization_gap_mae": metrics["mae"] - train_metrics["mae"],
                 })
-            test_predictions.update(_ensemble_predictions(
-                val_predictions, test_predictions, y[val_idx]
-            ))
+            ensemble_test, ensemble_train = _ensemble_predictions(
+                val_predictions, test_predictions, y[val_idx], train_predictions
+            )
+            test_predictions.update(ensemble_test)
             for model_id in ("stacking_ensemble", "weighted_ensemble"):
                 pred = test_predictions[model_id]
                 metrics = regression_metrics(y[test_idx], pred, n_predictors=len(feature_cols))
+                train_metrics = regression_metrics(
+                    y[train_idx], ensemble_train[model_id], n_predictors=len(feature_cols)
+                )
                 metric_rows.append({
                     "dataset": dataset_name, "seed": seed, "fold": fold,
                     "model": model_id, **metrics,
-                    "train_mae": np.nan, "generalization_gap_mae": np.nan,
+                    "train_mae": train_metrics["mae"],
+                    "generalization_gap_mae": metrics["mae"] - train_metrics["mae"],
                 })
             for model_id, pred in test_predictions.items():
                 for local, row_idx in enumerate(test_idx):

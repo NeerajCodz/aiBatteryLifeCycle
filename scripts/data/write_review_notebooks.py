@@ -243,11 +243,11 @@ display(metrics.groupby("model")[["mae", "rmse", "r2", "within_5pp"]].mean().sor
         "08 — Leakage-Safe Ensembles",
         "Review stacking and validation-error weighted ensembles fitted without outer-test labels.",
         [
-            md("Ensemble predictions are produced in Notebook 04 so all base and meta models share the same outer test fold."),
+            md("Ensemble predictions are produced in Notebook 04 so all base and meta models share the same outer test fold. Training MAE is an in-sample diagnostic; validation batteries, not training or test batteries, determine ensemble weights and stacking coefficients."),
             py("""import pandas as pd
 metrics = pd.read_csv(RESULTS / "nasa_classical_fold_metrics.csv")
 ensemble = metrics[metrics["model"].isin(["stacking_ensemble", "weighted_ensemble"])]
-display(ensemble.groupby("model")[["mae", "rmse", "r2", "within_5pp"]].mean().sort_values("mae"))"""),
+display(ensemble.groupby("model")[["train_mae", "mae", "generalization_gap_mae", "rmse", "r2", "within_5pp"]].mean().sort_values("mae"))"""),
         ],
     ),
     "09_external_calce.ipynb": (

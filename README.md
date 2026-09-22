@@ -37,6 +37,10 @@ other target proxies from model inputs.
 - Metrics: MAE, RMSE, MAPE, R², adjusted R², residual diagnostics, absolute
   ±5-SOH-percentage-point coverage, per-battery scores, 10,000-draw
   battery-cluster bootstrap intervals, and paired Wilcoxon–Holm tests.
+- Overfitting diagnostic: the research-winning weighted ensemble has mean
+  in-sample training MAE 0.562 pp versus held-out-battery fold MAE 3.779 pp
+  across 15 NASA folds, a 3.217 pp gap. Training error is optimistic; the
+  reproducible fold values are in the model-asset repository.
 - Model registry: exactly 20 evaluated entries—8 classical regressors, 10
   sequence architectures, and 2 leakage-safe ensembles.
 
