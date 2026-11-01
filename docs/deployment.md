@@ -49,17 +49,21 @@ python scripts/publish_reviewer4.py --review-root ../paper/revision-2026-11-r4
 
 ## Release to the existing Space
 
-Use the configured remotes and ordinary fast-forward pushes:
+Push the canonical source and deploy its committed changes through the Hub API:
 
 ```bash
-git remote -v
 git push origin HEAD:main
-git push space HEAD:main
+python scripts/deploy_space.py --source-base <last-deployed-source-commit> --resume
 ```
 
-Observe the Docker build/runtime until `RUNNING`. If manually paused, resume
-with authenticated `HfApi.restart_space` or Space settings. Keep the existing
-hardware choice. Credentials stay in the credential store or environment.
+The API handles binary PDF storage, which plain Git pushes reject. It uploads
+only committed blobs changed since the supplied source base, guards against
+concurrent Space edits with a parent commit, and records the source commit in
+the Space commit description. Hub and GitHub commit IDs differ. Never use a
+force push to reconcile them. Credentials come from the Hub token store or
+existing Git credential helper; they are not written to command arguments.
+Observe the Docker build/runtime until `RUNNING`. `--resume` resumes a paused
+Space on its existing hardware; it does not upgrade hardware.
 Verify the deployed commit, `/health`, `/api/versions`, research manifest and
 PDF, a figure and a valid 18-feature SOH prediction; inspect desktop/mobile
 research navigation. A successful push alone does not verify deployment.
