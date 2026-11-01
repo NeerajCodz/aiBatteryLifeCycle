@@ -25,6 +25,11 @@ other target proxies from model inputs.
 
 ## Reproducible benchmark
 
+The current paper is **State of Health Estimation and Target Leakage Auditing
+for Lithium Ion Batteries**, Reviewer 4 revision dated 1 November 2026. The
+Research tab includes the full manuscript, all 27 figures, nine tables, response
+and supplement. See [the revision contract](docs/reviewer4_revision.md).
+
 - Target: current-cycle SOH, `100 × full-cycle capacity / robust initial capacity`.
 - Inputs: 18 scalar summaries or a 64 × 5 sequence from the current discharge's
   4.0–3.6 V window; full-cycle capacity is retained only as the label.
@@ -37,6 +42,11 @@ other target proxies from model inputs.
 - Metrics: MAE, RMSE, MAPE, R², adjusted R², residual diagnostics, absolute
   ±5-SOH-percentage-point coverage, per-battery scores, 10,000-draw
   battery-cluster bootstrap intervals, and paired Wilcoxon–Holm tests.
+- Aggregation: average repeated held-out predictions per cycle first. Sample
+  MAE weights cycles equally; battery-macro MAE weights batteries equally.
+  Mean fold MAE is a third, separate diagnostic. The NASA weighted ensemble
+  has battery-macro MAE 3.536 pp and sample MAE 3.682 pp on the preserved
+  regression artifacts; these are descriptive benchmark rankings.
 - Overfitting diagnostic: the research-winning weighted ensemble has mean
   in-sample training MAE 0.562 pp versus held-out-battery fold MAE 3.779 pp
   across 15 NASA folds, a 3.217 pp gap. Training error is optimistic; the
@@ -86,6 +96,17 @@ jupyter lab notebooks/
 
 The downloader uses only the official NASA PCoE, CALCE, and Oxford ORA sources
 listed in the provenance file. Do not commit the raw archives.
+
+New sequence runs save train/validation/test predictions, split identities,
+train-fitted normalization, full monitored-loss histories and actual selected
+epochs. Preserve the original benchmark by directing reruns to a new folder:
+
+```bash
+python scripts/run_sequence_benchmark.py nasa recurrent --result-dir artifacts/v3/reviewer4_reruns
+```
+
+The original release did not retain its validation histories or best-epoch
+identifiers. New audit capture does not reconstruct those missing records.
 
 ## API contract
 

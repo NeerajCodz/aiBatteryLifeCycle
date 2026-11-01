@@ -1,0 +1,1151 @@
+{
+  "revision": "reviewer4-2026-11-01",
+  "title": "State of Health Estimation and Target Leakage Auditing for Lithium Ion Batteries",
+  "source_manuscript_sha256": "faf786321a8e9e57cb732c0ab1833565752ce289f2282f50e012f5db42829cca",
+  "primary_regression_artifacts_replaced": false,
+  "documents": [
+    {
+      "title": "Manuscript PDF",
+      "url": "/research/reviewer4/final_mdp_r4.pdf"
+    },
+    {
+      "title": "Reviewer response PDF",
+      "url": "/research/reviewer4/response_to_reviewer4.pdf"
+    },
+    {
+      "title": "Reproducibility supplement PDF",
+      "url": "/research/reviewer4/reproducibility_supplement.pdf"
+    }
+  ],
+  "figures": [
+    {
+      "number": 1,
+      "stem": "figure_01_health_state_distribution",
+      "caption": "NASA health-state distribution using the revised cell-reference SOH label. Healthy ≥90%, Aging 80–90%, Near-EOL 70–80%, and EOL <70%; these are descriptive bands rather than operational safety limits.",
+      "interpretation": "The class counts quantify imbalance before secondary classification; SOH bands are fixed before evaluation.",
+      "width_inches": 3.35,
+      "original_figure": 1,
+      "revision_figure": null,
+      "sources": [
+        "paper\\revision-2026-09\\restoration\\figure_data\\health_state_distribution.csv"
+      ],
+      "files": [
+        "figures/figure_01_health_state_distribution.png",
+        "figures/figure_01_health_state_distribution.pdf",
+        "figures/figure_01_health_state_distribution.svg"
+      ],
+      "provenance": "retained source-based restoration figure",
+      "downloads": {
+        "svg": "/research/reviewer4/figures/figure_01_health_state_distribution.svg",
+        "pdf": "/research/reviewer4/figures/figure_01_health_state_distribution.pdf"
+      },
+      "url": "/research/reviewer4/figures/figure_01_health_state_distribution.svg"
+    },
+    {
+      "number": 2,
+      "stem": "figure_02_health_state_by_temperature",
+      "caption": "NASA health-state counts by recorded ambient temperature. Unequal exposure and cell coverage preclude a causal interpretation of temperature differences.",
+      "interpretation": "Temperature groups have different cycle and cell support; their distribution does not establish a temperature effect on aging.",
+      "width_inches": 3.35,
+      "original_figure": 2,
+      "revision_figure": null,
+      "sources": [
+        "paper\\revision-2026-09\\restoration\\figure_data\\health_state_by_temperature.csv"
+      ],
+      "files": [
+        "figures/figure_02_health_state_by_temperature.png",
+        "figures/figure_02_health_state_by_temperature.pdf",
+        "figures/figure_02_health_state_by_temperature.svg"
+      ],
+      "provenance": "retained source-based restoration figure",
+      "downloads": {
+        "svg": "/research/reviewer4/figures/figure_02_health_state_by_temperature.svg",
+        "pdf": "/research/reviewer4/figures/figure_02_health_state_by_temperature.pdf"
+      },
+      "url": "/research/reviewer4/figures/figure_02_health_state_by_temperature.svg"
+    },
+    {
+      "number": 3,
+      "stem": "figure_03_observable_feature_correlation",
+      "caption": "Pairwise Pearson correlation of the 18 observable partial-discharge predictors in eligible NASA records. Full-cycle capacity and current SOH are excluded; undefined correlations are shown as blank cells. This descriptive plot is not a test-set feature-selection procedure.",
+      "interpretation": "Correlated voltage and thermal summaries share information. All 18 prespecified predictors remain in the benchmark; this plot does not establish causal importance.",
+      "width_inches": 6.65,
+      "original_figure": 3,
+      "revision_figure": null,
+      "sources": [
+        "paper\\revision-2026-09\\restoration\\figure_data\\feature_correlation.csv"
+      ],
+      "files": [
+        "figures/figure_03_observable_feature_correlation.png",
+        "figures/figure_03_observable_feature_correlation.pdf",
+        "figures/figure_03_observable_feature_correlation.svg"
+      ],
+      "provenance": "retained source-based restoration figure",
+      "downloads": {
+        "svg": "/research/reviewer4/figures/figure_03_observable_feature_correlation.svg",
+        "pdf": "/research/reviewer4/figures/figure_03_observable_feature_correlation.pdf"
+      },
+      "url": "/research/reviewer4/figures/figure_03_observable_feature_correlation.svg"
+    },
+    {
+      "number": 4,
+      "stem": "figure_04_battery_soh_trajectories",
+      "caption": "All 30 eligible NASA battery SOH trajectories, with descriptive linear trend lines and a 70% reference line. Panels use a shared SOH axis; cycle extent differs by cell.",
+      "interpretation": "The cell panels expose heterogeneous degradation rates and non-monotonic measurements that a single overlaid plot obscures. Dashed trend lines summarize observations and do not predict future life.",
+      "width_inches": 6.65,
+      "original_figure": 4,
+      "revision_figure": null,
+      "sources": [
+        "paper\\revision-2026-09\\restoration\\figure_data\\soh_trajectories.csv"
+      ],
+      "files": [
+        "figures/figure_04_battery_soh_trajectories.png",
+        "figures/figure_04_battery_soh_trajectories.pdf",
+        "figures/figure_04_battery_soh_trajectories.svg"
+      ],
+      "provenance": "retained source-based restoration figure",
+      "downloads": {
+        "svg": "/research/reviewer4/figures/figure_04_battery_soh_trajectories.svg",
+        "pdf": "/research/reviewer4/figures/figure_04_battery_soh_trajectories.pdf"
+      },
+      "url": "/research/reviewer4/figures/figure_04_battery_soh_trajectories.svg"
+    },
+    {
+      "number": 5,
+      "stem": "figure_05_capacity_and_observed_rul",
+      "caption": "Illustrative measured capacity and retrospective cycles to the first observed SOH <70% crossing. Of 30 NASA cells, 3 cross the threshold and 27 are right-censored. Censored cells have no exact RUL curve; these are observed labels, not RUL predictions.",
+      "interpretation": "Exact retrospective RUL is available only for cells with an observed threshold crossing. Finite recording length must not be treated as an EOL event; no predictive RUL performance is reported.",
+      "width_inches": 6.65,
+      "original_figure": 5,
+      "revision_figure": null,
+      "sources": [
+        "paper\\revision-2026-09\\restoration\\figure_data\\capacity_observed_rul.csv"
+      ],
+      "files": [
+        "figures/figure_05_capacity_and_observed_rul.png",
+        "figures/figure_05_capacity_and_observed_rul.pdf",
+        "figures/figure_05_capacity_and_observed_rul.svg"
+      ],
+      "provenance": "retained source-based restoration figure",
+      "downloads": {
+        "svg": "/research/reviewer4/figures/figure_05_capacity_and_observed_rul.svg",
+        "pdf": "/research/reviewer4/figures/figure_05_capacity_and_observed_rul.pdf"
+      },
+      "url": "/research/reviewer4/figures/figure_05_capacity_and_observed_rul.svg"
+    },
+    {
+      "number": 6,
+      "stem": "figure_06_full_system_architecture",
+      "caption": "Research system architecture. The grouped SOH evaluation supplies model and result artifacts; the API serves the packaged classical subset. Recommendation and simulation components remain exploratory and do not establish charging benefit.",
+      "interpretation": "",
+      "width_inches": 6.65,
+      "original_figure": 6,
+      "revision_figure": null,
+      "sources": [
+        "application/api",
+        "application/src/data/partial_cycle.py",
+        "application/src/evaluation/protocol.py"
+      ],
+      "files": [
+        "figures/figure_06_full_system_architecture.png",
+        "figures/figure_06_full_system_architecture.pdf",
+        "figures/figure_06_full_system_architecture.svg"
+      ],
+      "provenance": "retained source-based restoration figure",
+      "downloads": {
+        "svg": "/research/reviewer4/figures/figure_06_full_system_architecture.svg",
+        "pdf": "/research/reviewer4/figures/figure_06_full_system_architecture.pdf"
+      },
+      "url": "/research/reviewer4/figures/figure_06_full_system_architecture.svg"
+    },
+    {
+      "number": 7,
+      "stem": "figure_07_dataset_coverage",
+      "caption": "Eligible discharges and physical cells after quality checks. NASA contributes 30 cells, CALCE four, and Oxford eight; battery identity determines grouped partitions.",
+      "interpretation": "",
+      "width_inches": 3.35,
+      "original_figure": null,
+      "revision_figure": 1,
+      "sources": [
+        "paper\\revision-2026-09\\restoration\\figure_data\\dataset_coverage.csv"
+      ],
+      "files": [
+        "figures/figure_07_dataset_coverage.png",
+        "figures/figure_07_dataset_coverage.pdf",
+        "figures/figure_07_dataset_coverage.svg"
+      ],
+      "provenance": "retained source-based restoration figure",
+      "downloads": {
+        "svg": "/research/reviewer4/figures/figure_07_dataset_coverage.svg",
+        "pdf": "/research/reviewer4/figures/figure_07_dataset_coverage.pdf"
+      },
+      "url": "/research/reviewer4/figures/figure_07_dataset_coverage.svg"
+    },
+    {
+      "number": 8,
+      "stem": "figure_08_protocol_audit",
+      "caption": "ExtraTrees factorial audit of split unit and feature leakage. V1 random cycles, V2 within-cell chronological, and V3 held-out batteries are audit protocols; MAE is in absolute SOH percentage points.",
+      "interpretation": "",
+      "width_inches": 3.35,
+      "original_figure": null,
+      "revision_figure": 2,
+      "sources": [
+        "paper\\revision-2026-09\\restoration\\figure_data\\protocol_audit.csv"
+      ],
+      "files": [
+        "figures/figure_08_protocol_audit.png",
+        "figures/figure_08_protocol_audit.pdf",
+        "figures/figure_08_protocol_audit.svg"
+      ],
+      "provenance": "retained source-based restoration figure",
+      "downloads": {
+        "svg": "/research/reviewer4/figures/figure_08_protocol_audit.svg",
+        "pdf": "/research/reviewer4/figures/figure_08_protocol_audit.pdf"
+      },
+      "url": "/research/reviewer4/figures/figure_08_protocol_audit.svg"
+    },
+    {
+      "number": 9,
+      "stem": "figure_09_nasa_twenty_model_comparison",
+      "caption": "All 20 NASA models under the common grouped protocol. Bars report mean fold MAE, which differs from the battery-macro selection statistic and sample MAE.",
+      "interpretation": "",
+      "width_inches": 6.65,
+      "original_figure": null,
+      "revision_figure": 3,
+      "sources": [
+        "application/artifacts/v3/tables/table_2_nasa_grouped_results.csv"
+      ],
+      "files": [
+        "figures/figure_09_nasa_twenty_model_comparison.png",
+        "figures/figure_09_nasa_twenty_model_comparison.pdf",
+        "figures/figure_09_nasa_twenty_model_comparison.svg"
+      ],
+      "provenance": "retained source-based restoration figure",
+      "downloads": {
+        "svg": "/research/reviewer4/figures/figure_09_nasa_twenty_model_comparison.svg",
+        "pdf": "/research/reviewer4/figures/figure_09_nasa_twenty_model_comparison.pdf"
+      },
+      "url": "/research/reviewer4/figures/figure_09_nasa_twenty_model_comparison.svg"
+    },
+    {
+      "number": 10,
+      "stem": "figure_10_nasa_observed_vs_predicted",
+      "caption": "NASA Weighted Average Ensemble averaged held-out predictions. The diagonal represents perfect agreement and is not a fitted calibration line.",
+      "interpretation": "",
+      "width_inches": 3.35,
+      "original_figure": null,
+      "revision_figure": 4,
+      "sources": [
+        "application/artifacts/v3/results/averaged_predictions.csv"
+      ],
+      "files": [
+        "figures/figure_10_nasa_observed_vs_predicted.png",
+        "figures/figure_10_nasa_observed_vs_predicted.pdf",
+        "figures/figure_10_nasa_observed_vs_predicted.svg"
+      ],
+      "provenance": "retained source-based restoration figure",
+      "downloads": {
+        "svg": "/research/reviewer4/figures/figure_10_nasa_observed_vs_predicted.svg",
+        "pdf": "/research/reviewer4/figures/figure_10_nasa_observed_vs_predicted.pdf"
+      },
+      "url": "/research/reviewer4/figures/figure_10_nasa_observed_vs_predicted.svg"
+    },
+    {
+      "number": 11,
+      "stem": "figure_11_residual_diagnostics",
+      "caption": "NASA ensemble residual trend and distribution. Residuals are observed minus predicted SOH; asymmetry and tails motivate bias and error-quantile reporting.",
+      "interpretation": "",
+      "width_inches": 6.65,
+      "original_figure": null,
+      "revision_figure": 5,
+      "sources": [
+        "application/artifacts/v3/results/averaged_predictions.csv"
+      ],
+      "files": [
+        "figures/figure_11_residual_diagnostics.png",
+        "figures/figure_11_residual_diagnostics.pdf",
+        "figures/figure_11_residual_diagnostics.svg"
+      ],
+      "provenance": "retained source-based restoration figure",
+      "downloads": {
+        "svg": "/research/reviewer4/figures/figure_11_residual_diagnostics.svg",
+        "pdf": "/research/reviewer4/figures/figure_11_residual_diagnostics.pdf"
+      },
+      "url": "/research/reviewer4/figures/figure_11_residual_diagnostics.svg"
+    },
+    {
+      "number": 12,
+      "stem": "figure_12_classical_confusion_matrices",
+      "caption": "NASA classical model health-band confusion matrices derived from averaged held-out SOH estimates in the secondary reruns. Cells show counts and observed-class percentages. H Healthy, A Aging, N Near-EOL, E EOL; color intensity represents row-normalized frequency.",
+      "interpretation": "",
+      "width_inches": 6.65,
+      "original_figure": 7,
+      "revision_figure": null,
+      "sources": [
+        "paper/revision-2026-09/restoration/evaluation/classification_predictions.csv",
+        "paper/revision-2026-09/restoration/evaluation/confusion_matrices.csv"
+      ],
+      "files": [
+        "figures/figure_12_classical_confusion_matrices.png",
+        "figures/figure_12_classical_confusion_matrices.pdf",
+        "figures/figure_12_classical_confusion_matrices.svg"
+      ],
+      "provenance": "retained source-based restoration figure",
+      "downloads": {
+        "svg": "/research/reviewer4/figures/figure_12_classical_confusion_matrices.svg",
+        "pdf": "/research/reviewer4/figures/figure_12_classical_confusion_matrices.pdf"
+      },
+      "url": "/research/reviewer4/figures/figure_12_classical_confusion_matrices.svg"
+    },
+    {
+      "number": 13,
+      "stem": "figure_13_classical_roc_curves",
+      "caption": "NASA classical one-versus-rest ROC curves from the secondary reruns. Scores integrate an empirical validation-residual distribution around each SOH estimate. Residuals come from disjoint validation batteries. Legends give pooled AUC; unsupported classes are undefined.",
+      "interpretation": "",
+      "width_inches": 6.65,
+      "original_figure": 8,
+      "revision_figure": null,
+      "sources": [
+        "paper/revision-2026-09/restoration/evaluation/classification_predictions.csv",
+        "paper/revision-2026-09/restoration/evaluation/roc_points.csv"
+      ],
+      "files": [
+        "figures/figure_13_classical_roc_curves.png",
+        "figures/figure_13_classical_roc_curves.pdf",
+        "figures/figure_13_classical_roc_curves.svg"
+      ],
+      "provenance": "retained source-based restoration figure",
+      "downloads": {
+        "svg": "/research/reviewer4/figures/figure_13_classical_roc_curves.svg",
+        "pdf": "/research/reviewer4/figures/figure_13_classical_roc_curves.pdf"
+      },
+      "url": "/research/reviewer4/figures/figure_13_classical_roc_curves.svg"
+    },
+    {
+      "number": 14,
+      "stem": "figure_14_deep_confusion_matrices",
+      "caption": "NASA deep model health-band confusion matrices derived from averaged held-out SOH estimates in the secondary reruns. Cells show counts and observed-class percentages. H Healthy, A Aging, N Near-EOL, E EOL; color intensity represents row-normalized frequency.",
+      "interpretation": "",
+      "width_inches": 6.65,
+      "original_figure": 9,
+      "revision_figure": null,
+      "sources": [
+        "paper/revision-2026-09/restoration/evaluation/classification_predictions.csv",
+        "paper/revision-2026-09/restoration/evaluation/confusion_matrices.csv"
+      ],
+      "files": [
+        "figures/figure_14_deep_confusion_matrices.png",
+        "figures/figure_14_deep_confusion_matrices.pdf",
+        "figures/figure_14_deep_confusion_matrices.svg"
+      ],
+      "provenance": "retained source-based restoration figure",
+      "downloads": {
+        "svg": "/research/reviewer4/figures/figure_14_deep_confusion_matrices.svg",
+        "pdf": "/research/reviewer4/figures/figure_14_deep_confusion_matrices.pdf"
+      },
+      "url": "/research/reviewer4/figures/figure_14_deep_confusion_matrices.svg"
+    },
+    {
+      "number": 15,
+      "stem": "figure_15_deep_roc_curves",
+      "caption": "NASA deep one-versus-rest ROC curves from the secondary reruns. Scores integrate an empirical validation-residual distribution around each SOH estimate. Residuals come from disjoint validation batteries. Legends give pooled AUC; unsupported classes are undefined.",
+      "interpretation": "",
+      "width_inches": 6.65,
+      "original_figure": 10,
+      "revision_figure": null,
+      "sources": [
+        "paper/revision-2026-09/restoration/evaluation/classification_predictions.csv",
+        "paper/revision-2026-09/restoration/evaluation/roc_points.csv"
+      ],
+      "files": [
+        "figures/figure_15_deep_roc_curves.png",
+        "figures/figure_15_deep_roc_curves.pdf",
+        "figures/figure_15_deep_roc_curves.svg"
+      ],
+      "provenance": "retained source-based restoration figure",
+      "downloads": {
+        "svg": "/research/reviewer4/figures/figure_15_deep_roc_curves.svg",
+        "pdf": "/research/reviewer4/figures/figure_15_deep_roc_curves.pdf"
+      },
+      "url": "/research/reviewer4/figures/figure_15_deep_roc_curves.svg"
+    },
+    {
+      "number": 16,
+      "stem": "figure_16_ensemble_confusion_matrices",
+      "caption": "NASA ensemble model health-band confusion matrices derived from averaged held-out SOH estimates in the secondary reruns. Cells show counts and observed-class percentages. H Healthy, A Aging, N Near-EOL, E EOL; color intensity represents row-normalized frequency.",
+      "interpretation": "",
+      "width_inches": 6.65,
+      "original_figure": 11,
+      "revision_figure": null,
+      "sources": [
+        "paper/revision-2026-09/restoration/evaluation/classification_predictions.csv",
+        "paper/revision-2026-09/restoration/evaluation/confusion_matrices.csv"
+      ],
+      "files": [
+        "figures/figure_16_ensemble_confusion_matrices.png",
+        "figures/figure_16_ensemble_confusion_matrices.pdf",
+        "figures/figure_16_ensemble_confusion_matrices.svg"
+      ],
+      "provenance": "retained source-based restoration figure",
+      "downloads": {
+        "svg": "/research/reviewer4/figures/figure_16_ensemble_confusion_matrices.svg",
+        "pdf": "/research/reviewer4/figures/figure_16_ensemble_confusion_matrices.pdf"
+      },
+      "url": "/research/reviewer4/figures/figure_16_ensemble_confusion_matrices.svg"
+    },
+    {
+      "number": 17,
+      "stem": "figure_17_ensemble_roc_curves",
+      "caption": "NASA ensemble one-versus-rest ROC curves from the secondary reruns. Scores integrate an empirical validation-residual distribution around each SOH estimate. Ensemble residuals use battery-cross-fitted meta predictions. Legends give pooled AUC; unsupported classes are undefined.",
+      "interpretation": "",
+      "width_inches": 6.65,
+      "original_figure": 12,
+      "revision_figure": null,
+      "sources": [
+        "paper/revision-2026-09/restoration/evaluation/classification_predictions.csv",
+        "paper/revision-2026-09/restoration/evaluation/roc_points.csv"
+      ],
+      "files": [
+        "figures/figure_17_ensemble_roc_curves.png",
+        "figures/figure_17_ensemble_roc_curves.pdf",
+        "figures/figure_17_ensemble_roc_curves.svg"
+      ],
+      "provenance": "retained source-based restoration figure",
+      "downloads": {
+        "svg": "/research/reviewer4/figures/figure_17_ensemble_roc_curves.svg",
+        "pdf": "/research/reviewer4/figures/figure_17_ensemble_roc_curves.pdf"
+      },
+      "url": "/research/reviewer4/figures/figure_17_ensemble_roc_curves.svg"
+    },
+    {
+      "number": 18,
+      "stem": "figure_18_external_grouped",
+      "caption": "Five lowest sample-MAE models in grouped CALCE and Oxford fits, trained separately within each target dataset.",
+      "interpretation": "",
+      "width_inches": 6.65,
+      "original_figure": null,
+      "revision_figure": 6,
+      "sources": [
+        "paper\\revision-2026-09\\restoration\\figure_data\\external_grouped.csv"
+      ],
+      "files": [
+        "figures/figure_18_external_grouped.png",
+        "figures/figure_18_external_grouped.pdf",
+        "figures/figure_18_external_grouped.svg"
+      ],
+      "provenance": "retained source-based restoration figure",
+      "downloads": {
+        "svg": "/research/reviewer4/figures/figure_18_external_grouped.svg",
+        "pdf": "/research/reviewer4/figures/figure_18_external_grouped.pdf"
+      },
+      "url": "/research/reviewer4/figures/figure_18_external_grouped.svg"
+    },
+    {
+      "number": 19,
+      "stem": "figure_19_external_zero_shot",
+      "caption": "Five lowest sample-MAE frozen NASA models on CALCE and Oxford, without target-domain refitting or calibration. These are post-evaluation rankings, not a target-domain selection policy.",
+      "interpretation": "",
+      "width_inches": 6.65,
+      "original_figure": null,
+      "revision_figure": 7,
+      "sources": [
+        "paper\\revision-2026-09\\restoration\\figure_data\\external_zero_shot.csv"
+      ],
+      "files": [
+        "figures/figure_19_external_zero_shot.png",
+        "figures/figure_19_external_zero_shot.pdf",
+        "figures/figure_19_external_zero_shot.svg"
+      ],
+      "provenance": "retained source-based restoration figure",
+      "downloads": {
+        "svg": "/research/reviewer4/figures/figure_19_external_zero_shot.svg",
+        "pdf": "/research/reviewer4/figures/figure_19_external_zero_shot.pdf"
+      },
+      "url": "/research/reviewer4/figures/figure_19_external_zero_shot.svg"
+    },
+    {
+      "number": 20,
+      "stem": "figure_20_permutation_importance",
+      "caption": "Eight largest held-out-battery ExtraTrees permutation effects. Correlated predictors share information; these effects are predictive diagnostics rather than causal mechanisms.",
+      "interpretation": "",
+      "width_inches": 3.35,
+      "original_figure": null,
+      "revision_figure": 8,
+      "sources": [
+        "paper\\revision-2026-09\\restoration\\figure_data\\importance_top8.csv"
+      ],
+      "files": [
+        "figures/figure_20_permutation_importance.png",
+        "figures/figure_20_permutation_importance.pdf",
+        "figures/figure_20_permutation_importance.svg"
+      ],
+      "provenance": "retained source-based restoration figure",
+      "downloads": {
+        "svg": "/research/reviewer4/figures/figure_20_permutation_importance.svg",
+        "pdf": "/research/reviewer4/figures/figure_20_permutation_importance.pdf"
+      },
+      "url": "/research/reviewer4/figures/figure_20_permutation_importance.svg"
+    },
+    {
+      "number": 21,
+      "stem": "figure_21_feature_ablation",
+      "caption": "Feature-family ablations after retraining ExtraTrees. Removing a family differs from corrupting a trained model’s inputs.",
+      "interpretation": "",
+      "width_inches": 3.35,
+      "original_figure": null,
+      "revision_figure": 9,
+      "sources": [
+        "paper\\revision-2026-09\\restoration\\figure_data\\feature_ablation.csv"
+      ],
+      "files": [
+        "figures/figure_21_feature_ablation.png",
+        "figures/figure_21_feature_ablation.pdf",
+        "figures/figure_21_feature_ablation.svg"
+      ],
+      "provenance": "retained source-based restoration figure",
+      "downloads": {
+        "svg": "/research/reviewer4/figures/figure_21_feature_ablation.svg",
+        "pdf": "/research/reviewer4/figures/figure_21_feature_ablation.pdf"
+      },
+      "url": "/research/reviewer4/figures/figure_21_feature_ablation.svg"
+    },
+    {
+      "number": 22,
+      "stem": "figure_22_sensor_stress",
+      "caption": "Synthetic sensor stress for the trained full-feature ExtraTrees model: unmodified inputs, missing temperature, and voltage/current noise at 5% of training standard deviation.",
+      "interpretation": "",
+      "width_inches": 3.35,
+      "original_figure": null,
+      "revision_figure": 10,
+      "sources": [
+        "paper\\revision-2026-09\\restoration\\figure_data\\sensor_stress.csv"
+      ],
+      "files": [
+        "figures/figure_22_sensor_stress.png",
+        "figures/figure_22_sensor_stress.pdf",
+        "figures/figure_22_sensor_stress.svg"
+      ],
+      "provenance": "retained source-based restoration figure",
+      "downloads": {
+        "svg": "/research/reviewer4/figures/figure_22_sensor_stress.svg",
+        "pdf": "/research/reviewer4/figures/figure_22_sensor_stress.pdf"
+      },
+      "url": "/research/reviewer4/figures/figure_22_sensor_stress.svg"
+    },
+    {
+      "number": 23,
+      "stem": "figure_23_battery_cluster_intervals",
+      "caption": "Sample MAE with 95% battery-cluster bootstrap intervals for each dataset’s grouped winner, using 10,000 cluster resamples. CALCE has only four independent cells.",
+      "interpretation": "",
+      "width_inches": 3.35,
+      "original_figure": null,
+      "revision_figure": 11,
+      "sources": [
+        "application/artifacts/v3/results/best_model_cluster_bootstrap_ci.csv"
+      ],
+      "files": [
+        "figures/figure_23_battery_cluster_intervals.png",
+        "figures/figure_23_battery_cluster_intervals.pdf",
+        "figures/figure_23_battery_cluster_intervals.svg"
+      ],
+      "provenance": "retained source-based restoration figure",
+      "downloads": {
+        "svg": "/research/reviewer4/figures/figure_23_battery_cluster_intervals.svg",
+        "pdf": "/research/reviewer4/figures/figure_23_battery_cluster_intervals.pdf"
+      },
+      "url": "/research/reviewer4/figures/figure_23_battery_cluster_intervals.svg"
+    },
+    {
+      "number": 24,
+      "stem": "figure_24_leakage_safe_workflow",
+      "caption": "Leakage-safe signal and label paths. Full-cycle capacity constructs the retrospective SOH label and never enters predictors; calibration uses validation batteries and evaluation uses held-out batteries.",
+      "interpretation": "",
+      "width_inches": 6.65,
+      "original_figure": null,
+      "revision_figure": 12,
+      "sources": [
+        "application/api",
+        "application/src/data/partial_cycle.py",
+        "application/src/evaluation/protocol.py"
+      ],
+      "files": [
+        "figures/figure_24_leakage_safe_workflow.png",
+        "figures/figure_24_leakage_safe_workflow.pdf",
+        "figures/figure_24_leakage_safe_workflow.svg"
+      ],
+      "provenance": "retained source-based restoration figure",
+      "downloads": {
+        "svg": "/research/reviewer4/figures/figure_24_leakage_safe_workflow.svg",
+        "pdf": "/research/reviewer4/figures/figure_24_leakage_safe_workflow.pdf"
+      },
+      "url": "/research/reviewer4/figures/figure_24_leakage_safe_workflow.svg"
+    },
+    {
+      "number": 25,
+      "stem": "figure_25_matched_proxy_controls",
+      "width_inches": 6.65,
+      "caption": "Additional ExtraTrees controls. Within each split, all contracts use identical training and test rows, fixed hyperparameters, and either 18 observable features or 18 plus four real/shuffled proxy features. Panel (a) fixes training count at 1,152; panel (b) uses 836 rows with common temperature quotas. Test populations differ across V1/V2/V3, so between-protocol differences are descriptive, not isolated causal split effects.",
+      "sources": [
+        "reproducibility/tables/matched_control_summary.csv",
+        "reproducibility/tables/temperature_matched_control_summary.csv"
+      ],
+      "files": [
+        "figures/figure_25_matched_proxy_controls.png",
+        "figures/figure_25_matched_proxy_controls.pdf",
+        "figures/figure_25_matched_proxy_controls.svg"
+      ],
+      "provenance": "reviewer4_additional_analysis",
+      "downloads": {
+        "svg": "/research/reviewer4/figures/figure_25_matched_proxy_controls.svg",
+        "pdf": "/research/reviewer4/figures/figure_25_matched_proxy_controls.pdf"
+      },
+      "url": "/research/reviewer4/figures/figure_25_matched_proxy_controls.svg"
+    },
+    {
+      "number": 26,
+      "stem": "figure_26_grouped_permutation_intervals",
+      "width_inches": 6.65,
+      "caption": "Joint feature permutation and an additive interaction contrast for five held-out NASA ExtraTrees fits (seed 42). Each point averages ten permutations; bars are pointwise 95% intervals from 10,000 paired battery-cluster resamples, conditional on fitted models. Temperature has six features and voltage six. Within-battery shuffling preserves each cell's exposure context. The interaction contrast is Δ(T,V) − Δ(T) − Δ(V); it is a predictive perturbation diagnostic, not a causal interaction or multiplicity-adjusted test.",
+      "sources": [
+        "reproducibility/tables/permutation_cluster_intervals.csv"
+      ],
+      "files": [
+        "figures/figure_26_grouped_permutation_intervals.png",
+        "figures/figure_26_grouped_permutation_intervals.pdf",
+        "figures/figure_26_grouped_permutation_intervals.svg"
+      ],
+      "provenance": "reviewer4_additional_analysis",
+      "downloads": {
+        "svg": "/research/reviewer4/figures/figure_26_grouped_permutation_intervals.svg",
+        "pdf": "/research/reviewer4/figures/figure_26_grouped_permutation_intervals.pdf"
+      },
+      "url": "/research/reviewer4/figures/figure_26_grouped_permutation_intervals.svg"
+    },
+    {
+      "number": 27,
+      "stem": "figure_27_secondary_validation_test_gap",
+      "width_inches": 6.65,
+      "caption": "Validation and held-out-test MAE for all ten deep models in the saved NASA secondary reruns, averaged over 15 seed-fold fits per model. Validation batteries support stopping and therefore yield optimistic diagnostics; test batteries are disjoint. These rerun outputs are kept separate from the original regression results in Tables 3–4 and 9.",
+      "sources": [
+        "reproducibility/tables/secondary_nasa_gap_summary.csv"
+      ],
+      "files": [
+        "figures/figure_27_secondary_validation_test_gap.png",
+        "figures/figure_27_secondary_validation_test_gap.pdf",
+        "figures/figure_27_secondary_validation_test_gap.svg"
+      ],
+      "provenance": "reviewer4_additional_analysis",
+      "downloads": {
+        "svg": "/research/reviewer4/figures/figure_27_secondary_validation_test_gap.svg",
+        "pdf": "/research/reviewer4/figures/figure_27_secondary_validation_test_gap.pdf"
+      },
+      "url": "/research/reviewer4/figures/figure_27_secondary_validation_test_gap.svg"
+    }
+  ],
+  "tables": [
+    {
+      "number": 1,
+      "url": "/research/reviewer4/tables/table_01.csv"
+    },
+    {
+      "number": 2,
+      "url": "/research/reviewer4/tables/table_02.csv"
+    },
+    {
+      "number": 3,
+      "url": "/research/reviewer4/tables/table_03.csv"
+    },
+    {
+      "number": 4,
+      "url": "/research/reviewer4/tables/table_04.csv"
+    },
+    {
+      "number": 5,
+      "url": "/research/reviewer4/tables/table_05.csv"
+    },
+    {
+      "number": 6,
+      "url": "/research/reviewer4/tables/table_06.csv"
+    },
+    {
+      "number": 7,
+      "url": "/research/reviewer4/tables/table_07.csv"
+    },
+    {
+      "number": 8,
+      "url": "/research/reviewer4/tables/table_08.csv"
+    },
+    {
+      "number": 9,
+      "url": "/research/reviewer4/tables/table_09.csv"
+    }
+  ],
+  "assets": [
+    {
+      "path": "final_mdp_r4.pdf",
+      "sha256": "9278a0abba1ee8320a90c63d45e21802e5b841c7a0977494b53458c497c3c00c",
+      "bytes": 3779983
+    },
+    {
+      "path": "response_to_reviewer4.pdf",
+      "sha256": "6352ec6c387d6eb04526a968bc25d2b2670c667ac54d467f76296a4279fde1fe",
+      "bytes": 317208
+    },
+    {
+      "path": "reproducibility_supplement.pdf",
+      "sha256": "22892a25828cd61ff5afa4ee52b46fb8b667441ad0014685e8434bf0f4406f8b",
+      "bytes": 410251
+    },
+    {
+      "path": "figures/figure_01_health_state_distribution.svg",
+      "sha256": "47c81c4edf243bb47066f5bfff6fdd09602ac2cbbd8fee124d7725239a9ba073",
+      "bytes": 8243
+    },
+    {
+      "path": "figures/figure_01_health_state_distribution.pdf",
+      "sha256": "caee4a042d8683807a5ab43e96c21f7423ddb4bc56e6e0e2f7767240c42d8bdf",
+      "bytes": 11237
+    },
+    {
+      "path": "figures/figure_02_health_state_by_temperature.svg",
+      "sha256": "2c1b5146f7a4aa23d429d757340772ca46878f33607e982dd62f2a9d08897e2d",
+      "bytes": 13817
+    },
+    {
+      "path": "figures/figure_02_health_state_by_temperature.pdf",
+      "sha256": "3d453581cff5eb9e2e0936fff5421779d69b7ff99409515c5618a7ed7f78c14f",
+      "bytes": 12930
+    },
+    {
+      "path": "figures/figure_03_observable_feature_correlation.svg",
+      "sha256": "b46079f697700c3c2a85682aa21cd3438c5973f1810e7d031a7c3d2fbbb78b3a",
+      "bytes": 134694
+    },
+    {
+      "path": "figures/figure_03_observable_feature_correlation.pdf",
+      "sha256": "825c9d2c3980a8aa1630a04510fd5cb9c63538b9ec4953a975b9a98d6303b268",
+      "bytes": 34468
+    },
+    {
+      "path": "figures/figure_04_battery_soh_trajectories.svg",
+      "sha256": "f3ea9aae337ac49eccba458f11239003e07a735f5b0ae32800964beeae8fe23d",
+      "bytes": 192986
+    },
+    {
+      "path": "figures/figure_04_battery_soh_trajectories.pdf",
+      "sha256": "c51627a2711d4dd96aa8398dbee85dad06d4eb1578db3d6fb61117225954bb9c",
+      "bytes": 49741
+    },
+    {
+      "path": "figures/figure_05_capacity_and_observed_rul.svg",
+      "sha256": "2221d0663152d314e857090c5bb63e72ab8c796f2d4655cccc25e27d23843a29",
+      "bytes": 48422
+    },
+    {
+      "path": "figures/figure_05_capacity_and_observed_rul.pdf",
+      "sha256": "ba5e75faf21321b2524c975cff2bd9fbd1fa2913ba89820f6d01bd04ae072cf5",
+      "bytes": 20359
+    },
+    {
+      "path": "figures/figure_06_full_system_architecture.svg",
+      "sha256": "e1fe08196be567f3769b3e0deb333f6cfde8448831319ced48a3e4accc9589f6",
+      "bytes": 8633
+    },
+    {
+      "path": "figures/figure_06_full_system_architecture.pdf",
+      "sha256": "c5958cb577a871626a531390e865921e346a5bb7e1d5fd6fa579fdb3f2375700",
+      "bytes": 13734
+    },
+    {
+      "path": "figures/figure_07_dataset_coverage.svg",
+      "sha256": "34e6b3a6f83e10b75bf406395ac463c8163d60a54a1affbd89d8695f0215a631",
+      "bytes": 6995
+    },
+    {
+      "path": "figures/figure_07_dataset_coverage.pdf",
+      "sha256": "6b37d8bd2712b107ee90574a3792524b5b6c57c8a0c961ed8fc869980adf94a7",
+      "bytes": 12111
+    },
+    {
+      "path": "figures/figure_08_protocol_audit.svg",
+      "sha256": "e2a7b313193deea850fc3057c94be6730db858eb81407e8be1139a24c509a027",
+      "bytes": 9278
+    },
+    {
+      "path": "figures/figure_08_protocol_audit.pdf",
+      "sha256": "61a0c482b3bfb85b327e2e9c821a92c1d08fb922393ee68032b16cb0cf293379",
+      "bytes": 12114
+    },
+    {
+      "path": "figures/figure_09_nasa_twenty_model_comparison.svg",
+      "sha256": "8f01ae41c221f8b771fa7d7a56216acb17d56717c9f4ab205245fa7fd1f3a159",
+      "bytes": 22734
+    },
+    {
+      "path": "figures/figure_09_nasa_twenty_model_comparison.pdf",
+      "sha256": "c7d03e3d02f67ce8151bea75ab3ad7d738d8005f30217edc56ead17f3e0742ab",
+      "bytes": 18131
+    },
+    {
+      "path": "figures/figure_10_nasa_observed_vs_predicted.svg",
+      "sha256": "7dfba1a7996cf7f515718956f1e6fe78cabd398b06e1209d8d9459bf2622743a",
+      "bytes": 328697
+    },
+    {
+      "path": "figures/figure_10_nasa_observed_vs_predicted.pdf",
+      "sha256": "33ad572a654ab1891a6594157ea7da88e75c021b2683c6182fb752592fbbaff1",
+      "bytes": 40365
+    },
+    {
+      "path": "figures/figure_11_residual_diagnostics.svg",
+      "sha256": "5d66a9dccce9f3193eb1e5e25b89196055e215116a467d78d9942ab0d74d475e",
+      "bytes": 340890
+    },
+    {
+      "path": "figures/figure_11_residual_diagnostics.pdf",
+      "sha256": "62ce87b7b2ee2cf972df8e127939b4dd30e8f27e831bce726f2337d53b2adece",
+      "bytes": 48277
+    },
+    {
+      "path": "figures/figure_12_classical_confusion_matrices.svg",
+      "sha256": "234b39dcbff751649d85c93e61ed62813b7049071f1d9eddf863d9e783ea92b7",
+      "bytes": 98944
+    },
+    {
+      "path": "figures/figure_12_classical_confusion_matrices.pdf",
+      "sha256": "b6870577fcf6e546b10cc3f03529cee29035263eb5e650ccfc44d6ca704bfa87",
+      "bytes": 22270
+    },
+    {
+      "path": "figures/figure_13_classical_roc_curves.svg",
+      "sha256": "644c73d62a30c64b1cc8aedb85a4e4a7e43f7f39afe280c00576a63907e5b390",
+      "bytes": 301058
+    },
+    {
+      "path": "figures/figure_13_classical_roc_curves.pdf",
+      "sha256": "da807adeae897e0f47615686a117277a83acec89d499c8e4225432fd7910550a",
+      "bytes": 74424
+    },
+    {
+      "path": "figures/figure_14_deep_confusion_matrices.svg",
+      "sha256": "0f4f594a064a649d5df0de18cefd44f27abfd3378dbf889dc26d9e50d20e3b02",
+      "bytes": 123377
+    },
+    {
+      "path": "figures/figure_14_deep_confusion_matrices.pdf",
+      "sha256": "e8ee3c0aa7900bc8249af8d44d9c340c251215368cca7c368d82975e3c4ea0ee",
+      "bytes": 24239
+    },
+    {
+      "path": "figures/figure_15_deep_roc_curves.svg",
+      "sha256": "9fb97d0d136e4f83d221c87142d0ad5553387aec09559f560b366f7aa8ebc20e",
+      "bytes": 394136
+    },
+    {
+      "path": "figures/figure_15_deep_roc_curves.pdf",
+      "sha256": "85d4c343d14a5bc62b6b73afeb4e5e830287be5f29ecb375172e7a395bf9df4a",
+      "bytes": 103278
+    },
+    {
+      "path": "figures/figure_16_ensemble_confusion_matrices.svg",
+      "sha256": "5f8b002f29e0f7522da1d108e0aa358b0935297b816ab34e00bc96deda0d27f3",
+      "bytes": 25628
+    },
+    {
+      "path": "figures/figure_16_ensemble_confusion_matrices.pdf",
+      "sha256": "ed877c22774ee6e76e691e012fe8559fa6b4a22c31c8f8fc9091417280b537d7",
+      "bytes": 14332
+    },
+    {
+      "path": "figures/figure_17_ensemble_roc_curves.svg",
+      "sha256": "b8cd70c5a54ae3898e4bdec460fe7f48f977333298595addfa60a9ebbc933594",
+      "bytes": 76569
+    },
+    {
+      "path": "figures/figure_17_ensemble_roc_curves.pdf",
+      "sha256": "c979b3bb7b72f6b77223f82bda12b36377d50beaee3292becf87b7c5df37dcc8",
+      "bytes": 27617
+    },
+    {
+      "path": "figures/figure_18_external_grouped.svg",
+      "sha256": "f815153a2ca2d5ad739422aedec49f05f545d1c7e79e354de39d4e8d678aee36",
+      "bytes": 19862
+    },
+    {
+      "path": "figures/figure_18_external_grouped.pdf",
+      "sha256": "40bef4c3b0dd8c116c7b05d7656e8cf4ff2e67f2f254679daa660647c8b8b8bc",
+      "bytes": 15633
+    },
+    {
+      "path": "figures/figure_19_external_zero_shot.svg",
+      "sha256": "883945c47ac85fbe6647dc5a6ecd84b548717ee946435915d6af171a9d348caa",
+      "bytes": 18605
+    },
+    {
+      "path": "figures/figure_19_external_zero_shot.pdf",
+      "sha256": "554d7b4704437848f87b56d29f6939f609b1a5cf18f447f99eec150541b239c1",
+      "bytes": 15683
+    },
+    {
+      "path": "figures/figure_20_permutation_importance.svg",
+      "sha256": "accf3e8e1678ba42ca087987589d67e85c4a2964253b70dfbd63cfeaed65f2a4",
+      "bytes": 12194
+    },
+    {
+      "path": "figures/figure_20_permutation_importance.pdf",
+      "sha256": "2b36d3e334411d75938bf8d6e96c75d221388a93893e74fbfe09336f754baad8",
+      "bytes": 17746
+    },
+    {
+      "path": "figures/figure_21_feature_ablation.svg",
+      "sha256": "6969d026e8b5e0296191fed2b265c170e9dfafa0e16e57e3acf7ec8571293cba",
+      "bytes": 8921
+    },
+    {
+      "path": "figures/figure_21_feature_ablation.pdf",
+      "sha256": "7eab38c53bba7cdb60a151f4a28ed2dafe14069304a86aa28b32304b981f9a6b",
+      "bytes": 13271
+    },
+    {
+      "path": "figures/figure_22_sensor_stress.svg",
+      "sha256": "f58495088c47e612ed46550b4363656cdec6177058413dbd166190e40d8e504b",
+      "bytes": 7465
+    },
+    {
+      "path": "figures/figure_22_sensor_stress.pdf",
+      "sha256": "0dbc37be8467818ac0970fb4ddf80cd711def6fc538c88c9af6d86fb0ac89f69",
+      "bytes": 15437
+    },
+    {
+      "path": "figures/figure_23_battery_cluster_intervals.svg",
+      "sha256": "982e9c6c206648d379667964dc3a0f5b3007a9c8ea07cddb04890a118098d99f",
+      "bytes": 9697
+    },
+    {
+      "path": "figures/figure_23_battery_cluster_intervals.pdf",
+      "sha256": "c0dce02d45886786d6095cdf12f8b7c84f894cd624f29c156beb9cfe8806f6cf",
+      "bytes": 12952
+    },
+    {
+      "path": "figures/figure_24_leakage_safe_workflow.svg",
+      "sha256": "611eaeff9fb37e6ed64540f2dd397feb826eccad34e9afd775f12aff9e3cc2b7",
+      "bytes": 7547
+    },
+    {
+      "path": "figures/figure_24_leakage_safe_workflow.pdf",
+      "sha256": "542f238d6b241f1f073d43d10af9eafb5564fa4e113bd9efe0ccbf76b0e37ac2",
+      "bytes": 17570
+    },
+    {
+      "path": "figures/figure_25_matched_proxy_controls.svg",
+      "sha256": "64223cd73c57db1753979c9aeb3c40598642b5ed1ba7136f7df49ea7e8b253f1",
+      "bytes": 22358
+    },
+    {
+      "path": "figures/figure_25_matched_proxy_controls.pdf",
+      "sha256": "e073c9b0b88d968ab86023a7bb3255b6775b787a28ea2be0cbc4d3cc202575d7",
+      "bytes": 19557
+    },
+    {
+      "path": "figures/figure_26_grouped_permutation_intervals.svg",
+      "sha256": "1be7428ff99d2071d2ab1b3fe00158a763f2d4d51ef93c03c176b3f6f32696eb",
+      "bytes": 16342
+    },
+    {
+      "path": "figures/figure_26_grouped_permutation_intervals.pdf",
+      "sha256": "201c7bafe3cf48bb3aa20db74d7ecc097da3e801ec813fdb57677153898139da",
+      "bytes": 18545
+    },
+    {
+      "path": "figures/figure_27_secondary_validation_test_gap.svg",
+      "sha256": "ce6f6ad83c5e53fab2692c5accf14abf841df5b8b7d62eb9973e76ceedfb4abb",
+      "bytes": 17343
+    },
+    {
+      "path": "figures/figure_27_secondary_validation_test_gap.pdf",
+      "sha256": "3bbcc5ffc7bd3a9709b8d2253733e453db48c76b45f5195deac659e2ae7bd02f",
+      "bytes": 15110
+    },
+    {
+      "path": "tables/table_01.csv",
+      "sha256": "004f1f950f869ca49cb69a95410eab7334acd2ec115c764fb5fa0c681b2db1c0",
+      "bytes": 206
+    },
+    {
+      "path": "tables/table_02.csv",
+      "sha256": "6d314fc8c9f486142c218adbb923e2ff065788f28d9ac5fcf32f52f983e05412",
+      "bytes": 419
+    },
+    {
+      "path": "tables/table_03.csv",
+      "sha256": "82f2c50f703347e8e1099fd9ef453e371e184b5f57c7bec41d8c38e7c0e19649",
+      "bytes": 955
+    },
+    {
+      "path": "tables/table_04.csv",
+      "sha256": "05875fef45095f2b0bb4f3eab88a31c0eb912bd4b2a368cf96e574f986a9d18b",
+      "bytes": 235
+    },
+    {
+      "path": "tables/table_05.csv",
+      "sha256": "9c6d9a6f1a967e7b58d3b543627084b3a14f0212eb0404cb90f147fa5dbf932e",
+      "bytes": 770
+    },
+    {
+      "path": "tables/table_06.csv",
+      "sha256": "d59339e7e86ee4eaa0291b0ecf2c1d1cf3cd37ceecd65dcc12bade0e3eda3083",
+      "bytes": 428
+    },
+    {
+      "path": "tables/table_07.csv",
+      "sha256": "f2d18d8c760284f7798990a008dfb59fd46e47d748085928fdf2cd486554facd",
+      "bytes": 908
+    },
+    {
+      "path": "tables/table_08.csv",
+      "sha256": "38b71b9ebb5571aa0902c42e44985445f2911ae079c1e1ab97789735b48611e8",
+      "bytes": 612
+    },
+    {
+      "path": "tables/table_09.csv",
+      "sha256": "d1425144bcc565bb7417bcb776d8a64eacd839fec64a1a8de99723becdd80f8b",
+      "bytes": 567
+    },
+    {
+      "path": "audit/calce_leave_one_battery_out_sensitivity.csv",
+      "sha256": "7fba37c5ff38c220081f511ec758ac8739ae4db75a494441863dd203707520ce",
+      "bytes": 275
+    },
+    {
+      "path": "audit/matched_control_fold_metrics.csv",
+      "sha256": "64f4a27c6fb0fb9a622a5071adebb714b07e91de4aedfa216c31f243f39a66ce",
+      "bytes": 6183
+    },
+    {
+      "path": "audit/matched_control_paired_intervals.csv",
+      "sha256": "5121c22e97f1c63cea439d3cb381ff582e6455f14bc3f2bb64d68a6a69cbc950",
+      "bytes": 777
+    },
+    {
+      "path": "audit/matched_control_summary.csv",
+      "sha256": "1c08b0b6188e184a6fdeec5ca57d2dd36aabde5015a41925afebd4e03352426b",
+      "bytes": 966
+    },
+    {
+      "path": "audit/matched_control_temperature_current_strata.csv",
+      "sha256": "ac0fc93dcf38a91b7bbe58a83af87d91d9711a8626ea160fb18727ddd3c22642",
+      "bytes": 5420
+    },
+    {
+      "path": "audit/nasa_metric_estimands.csv",
+      "sha256": "7aeb18d7f2528cb124d0bde42bae161128a58636fe57a0063a29a723ea30a3af",
+      "bytes": 1608
+    },
+    {
+      "path": "audit/nasa_split_inventory.csv",
+      "sha256": "e2b58b82f47f2bf58c109514dd6c164f0b2045612452f5d3621c33c9871b63e8",
+      "bytes": 11520
+    },
+    {
+      "path": "audit/nasa_split_records.csv",
+      "sha256": "808e8c94ab70b238819b2b3864354ce15c708ebbbeeecd76eed09c18a45edd57",
+      "bytes": 1643810
+    },
+    {
+      "path": "audit/original_deep_fold_stopping.csv",
+      "sha256": "f1ce996d9537f1c2b086ddd0bf3bc456b0e888f77d0fc60463f26495d9fd8d75",
+      "bytes": 116932
+    },
+    {
+      "path": "audit/original_deep_stopping_summary.csv",
+      "sha256": "26c62540eec0ec497b5581d15db9638a0ab65503b3160714ddcb1aee374bc56b",
+      "bytes": 2950
+    },
+    {
+      "path": "audit/permutation_cluster_intervals.csv",
+      "sha256": "4890be661888dce529c6810d08e967c3740add28bb6e0cfd560b126c96440daf",
+      "bytes": 4495
+    },
+    {
+      "path": "audit/secondary_ensemble_fold_weights.csv",
+      "sha256": "1b5a01bf6608b8f74c5b2df988b3f671314d0cbeeb308431ef3946e15df1d518",
+      "bytes": 6411
+    },
+    {
+      "path": "audit/secondary_nasa_gap_summary.csv",
+      "sha256": "c40f782d9e3b5eb2f68ffcee6aa1e3c41d6b08ad1ec783ea92f33fd67d42f746",
+      "bytes": 956
+    },
+    {
+      "path": "audit/secondary_nasa_validation_test_gaps.csv",
+      "sha256": "49e8d0744101a98710ff23a68f72e17dc8993bf1256c1c3bc89317082bfc4d68",
+      "bytes": 16017
+    },
+    {
+      "path": "audit/temperature_ablation_fold_metrics.csv",
+      "sha256": "719365fea3cae461c71173cace3f1c3fbf90e70901720a6bfa4d967791d83648",
+      "bytes": 236
+    },
+    {
+      "path": "audit/temperature_ablation_paired_interval.csv",
+      "sha256": "eb7f6d11b6b7d5c9ebfbfa761c1b3dce8ca90453c5ca79c9936e5d679db7fd51",
+      "bytes": 115
+    },
+    {
+      "path": "audit/temperature_matched_control_fold_metrics.csv",
+      "sha256": "32b33b7bc70d5d12afc00f0adc2448bb065569a411edb4fd1ab6b0271025bf42",
+      "bytes": 6876
+    },
+    {
+      "path": "audit/temperature_matched_control_paired_intervals.csv",
+      "sha256": "8edcc2b070fb601aac856b1e35e211ca1e23c0166071383fa5715a25d4dad314",
+      "bytes": 778
+    },
+    {
+      "path": "audit/temperature_matched_control_summary.csv",
+      "sha256": "bab3a66982cba7d1639542def3bfbfbc1e13ae271b48d79d6b513df80771ced1",
+      "bytes": 962
+    },
+    {
+      "path": "audit/temperature_matched_control_temperature_current_strata.csv",
+      "sha256": "d5620beea44b10b10bced7b0b826d27617e86ba801695079ff7aaffe17a2567d",
+      "bytes": 5403
+    },
+    {
+      "path": "audit/verified_nasa_wilcoxon_holm.csv",
+      "sha256": "ee978ad1547a11e013797fc1a140198fe4a45a05edd593a94c53124598dbe363",
+      "bytes": 2030
+    },
+    {
+      "path": "audit/verification_final.json",
+      "sha256": "ed48ee4aa0d163c260550e9d3bb5a98d1d57687df4032ad3ec1bc43c7bbe60bb",
+      "bytes": 1050
+    },
+    {
+      "path": "audit/verification_scientific.json",
+      "sha256": "33540f029258294ca772d8527a769df897a880a98a35f0c2cebd4020aeb52eb7",
+      "bytes": 536
+    },
+    {
+      "path": "audit/verification_documents.json",
+      "sha256": "7342c5136a23b2e64ee2852d73170a826611e90d52ecef48f79c24b31f627e4a",
+      "bytes": 439
+    },
+    {
+      "path": "audit/reference_assessment.json",
+      "sha256": "9c6203a6aa35686168f601f56712caca554e525a1f49ac022ae5ba5e53db2de8",
+      "bytes": 2289
+    },
+    {
+      "path": "audit/text_change_audit.json",
+      "sha256": "632b92782fb290402cafe5f73922c427f821f577cd11249ae24b78737bfa9bed",
+      "bytes": 15507
+    }
+  ],
+  "metric_definitions": {
+    "sample_mae": "Mean cycle error after averaging repeated held-out predictions per cycle.",
+    "battery_macro_mae": "Equal-weight mean of per-battery MAEs after cycle prediction averaging.",
+    "fold_mean_mae": "Equal-weight mean of the 15 seed-fold MAEs before prediction pooling."
+  },
+  "limitations": "Original validation histories and best-epoch identifiers were not recoverable. Secondary reruns remain separately labeled. Inference is conditional and exploratory; CALCE has four independent cells."
+}

@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import random
+import json
+from pathlib import Path
 from collections.abc import Callable
 
 import numpy as np
@@ -83,6 +85,7 @@ def _train_torch_model(
     patience: int,
     batch_size: int,
     device: str,
+    diagnostics: dict | None = None,
 ) -> tuple[np.ndarray, np.ndarray, int]:
     import torch
     from torch.utils.data import DataLoader, TensorDataset
@@ -122,7 +125,19 @@ def _train_torch_model(
         return np.concatenate(outputs) * y_scale + y_mean
 
     epochs = len(history.get("train_losses", []))
-    return predict(X_train), predict(X_test), epochs
+    result = predict(X_train), predict(X_test), epochs
+    if diagnostics is not None:
+        diagnostics.update({
+            'train_losses': [float(v) for v in history['train_losses']],
+            'val_losses': [float(v) for v in history['val_losses']],
+            'best_epoch': int(np.argmin(history['val_losses'])) + 1,
+            'epochs_trained': epochs,
+            'monitor': ('vae_reconstruction_plus_annealed_kl_plus_health_loss'
+                        if model_id == 'vae_lstm' else 'normalized_mean_batch_mae'),
+            'target_mean': y_mean, 'target_scale': y_scale,
+            'validation_predictions': predict(X_val),
+        })
+    return result
 
 
 def _train_tensorflow_model(
@@ -136,6 +151,7 @@ def _train_tensorflow_model(
     max_epochs: int,
     patience: int,
     batch_size: int,
+    diagnostics: dict | None = None,
 ) -> tuple[np.ndarray, np.ndarray, int]:
     import tensorflow as tf
     from src.models.deep.itransformer import (
@@ -180,6 +196,17 @@ def _train_tensorflow_model(
         return np.asarray(raw).reshape(-1) * y_scale + y_mean
 
     result = (predict(X_train), predict(X_test), len(history.history["loss"]))
+    if diagnostics is not None:
+        diagnostics.update({
+            'train_losses': [float(v) for v in history.history['loss']],
+            'val_losses': [float(v) for v in history.history['val_loss']],
+            'best_epoch': int(np.argmin(history.history['val_loss'])) + 1,
+            'epochs_trained': len(history.history['loss']),
+            'monitor': ('weighted_two_head_normalized_mae'
+                        if model_id == 'physics_itransformer' else 'normalized_mae'),
+            'target_mean': y_mean, 'target_scale': y_scale,
+            'validation_predictions': predict(X_val),
+        })
     tf.keras.backend.clear_session()
     return result
 
@@ -195,6 +222,7 @@ def run_grouped_sequence_benchmark(
     patience: int = 20,
     batch_size: int = 64,
     model_ids: tuple[str, ...] | None = None,
+    audit_dir: Path | None = None,
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
     """Evaluate all ten sequence models without using test data for stopping."""
     if len(index) != len(X):
@@ -231,15 +259,21 @@ def run_grouped_sequence_benchmark(
                     flush=True,
                 )
                 _set_seed(seed)
+                diagnostics = {} if audit_dir is not None else None
                 train_pred, test_pred, epochs = _train_torch_model(
                     model_id, factory(), X_train, y[train_idx], X_val, y[val_idx], X_test,
                     max_epochs=max_epochs, patience=patience, batch_size=batch_size,
-                    device=device,
+                    device=device, diagnostics=diagnostics,
                 )
                 _append_results(
                     metric_rows, prediction_rows, dataset_name, seed, fold, model_id,
                     train_idx, test_idx, groups, index, y, train_pred, test_pred, epochs,
                 )
+                if audit_dir is not None:
+                    _save_grouped_audit(audit_dir, dataset_name, model_id, seed, fold,
+                                        index, y, (train_idx, val_idx, test_idx),
+                                        train_pred, test_pred, diagnostics, scaler,
+                                        max_epochs, patience)
                 print(
                     f"[{dataset_name}] seed={seed} fold={fold}/{available_splits} "
                     f"model={model_id} done epochs={epochs} mae={metric_rows[-1]['mae']:.4f}",
@@ -254,20 +288,86 @@ def run_grouped_sequence_benchmark(
                     flush=True,
                 )
                 _set_seed(seed)
+                diagnostics = {} if audit_dir is not None else None
                 train_pred, test_pred, epochs = _train_tensorflow_model(
                     model_id, X_train, y[train_idx], X_val, y[val_idx], X_test,
                     max_epochs=max_epochs, patience=patience, batch_size=batch_size,
+                    diagnostics=diagnostics,
                 )
                 _append_results(
                     metric_rows, prediction_rows, dataset_name, seed, fold, model_id,
                     train_idx, test_idx, groups, index, y, train_pred, test_pred, epochs,
                 )
+                if audit_dir is not None:
+                    _save_grouped_audit(audit_dir, dataset_name, model_id, seed, fold,
+                                        index, y, (train_idx, val_idx, test_idx),
+                                        train_pred, test_pred, diagnostics, scaler,
+                                        max_epochs, patience)
                 print(
                     f"[{dataset_name}] seed={seed} fold={fold}/{available_splits} "
                     f"model={model_id} done epochs={epochs} mae={metric_rows[-1]['mae']:.4f}",
                     flush=True,
                 )
     return pd.DataFrame(metric_rows), pd.DataFrame(prediction_rows)
+
+
+def _save_grouped_audit(directory, dataset, model, seed, fold, index, y, partitions,
+                        train_pred, test_pred, diagnostics, scaler, max_epochs, patience):
+    from src.utils.config import SEQUENCE_FEATURE_COLS_V3
+    write_fit_audit(
+        directory, dataset=dataset, model=model, seed=seed, fold=fold, index=index,
+        y=y, partitions=partitions, train_predictions=train_pred,
+        test_predictions=test_pred, diagnostics=diagnostics,
+        preprocessing={'channel_median': scaler.median_.tolist(),
+                       'channel_mean': scaler.mean_.tolist(),
+                       'channel_scale': scaler.scale_.tolist(),
+                       'channels': list(SEQUENCE_FEATURE_COLS_V3), 'fit_role': 'train'},
+        max_epochs=max_epochs, patience=patience,
+    )
+
+
+def write_fit_audit(directory: Path, *, dataset: str, model: str, seed: int, fold: int,
+                    index: pd.DataFrame, y: np.ndarray, partitions: tuple,
+                    train_predictions: np.ndarray, test_predictions: np.ndarray,
+                    diagnostics: dict, preprocessing: dict,
+                    max_epochs: int, patience: int) -> None:
+    """Persist a new fit's real history and predictions; never infer missing old history."""
+    roles = ('train', 'validation', 'test')
+    batteries = {role: sorted(index.iloc[ix].battery_id.astype(str).unique().tolist())
+                 for role, ix in zip(roles, partitions)}
+    if any(set(batteries[a]) & set(batteries[b])
+           for a, b in [('train', 'validation'), ('train', 'test'), ('validation', 'test')]):
+        raise ValueError('Training audit requires disjoint battery partitions')
+    predictions = (train_predictions, diagnostics['validation_predictions'], test_predictions)
+    rows = []
+    for role, ix, pred in zip(roles, partitions, predictions):
+        if len(ix) != len(pred):
+            raise ValueError('Audit prediction length does not match partition')
+        for row_idx, estimate in zip(ix, pred):
+            rows.append({'dataset': dataset, 'model': model, 'seed': seed, 'fold': fold,
+                         'role': role, 'row_index': int(row_idx),
+                         'battery_id': str(index.iloc[row_idx].battery_id),
+                         'cycle_number': int(index.iloc[row_idx].cycle_number),
+                         'y_true': float(y[row_idx]), 'y_pred': float(estimate)})
+    val_mae = float(np.mean(abs(y[partitions[1]] - predictions[1])))
+    test_mae = float(np.mean(abs(y[partitions[2]] - predictions[2])))
+    record = {key: value for key, value in diagnostics.items() if key != 'validation_predictions'}
+    record.update({'schema_version': 1, 'provenance': 'new_audited_fit',
+                   'dataset': dataset, 'model': model, 'seed': seed, 'fold': fold,
+                   'batteries': batteries, 'row_indices': {role: ix.tolist() for role, ix in zip(roles, partitions)},
+                   'preprocessing': preprocessing, 'max_epochs': max_epochs, 'patience': patience,
+                   'epoch_cap_reached': record['epochs_trained'] == max_epochs,
+                   'validation_mae': val_mae, 'test_mae': test_mae,
+                   'test_minus_validation_mae': test_mae - val_mae})
+    directory = Path(directory)
+    directory.mkdir(parents=True, exist_ok=True)
+    stem = f'{dataset.lower()}_{model}_s{seed}_f{fold}'
+    # JSON is written last, so it marks a complete prediction/history pair.
+    for suffix, text in [('csv', pd.DataFrame(rows).to_csv(index=False)),
+                         ('json', json.dumps(record, indent=2, allow_nan=False))]:
+        temporary = directory / f'{stem}.{suffix}.tmp'
+        temporary.write_text(text, encoding='utf-8')
+        temporary.replace(directory / f'{stem}.{suffix}')
 
 
 def _append_results(

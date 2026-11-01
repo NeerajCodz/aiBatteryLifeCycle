@@ -57,10 +57,13 @@ def main() -> None:
     parser.add_argument("--patience", type=int, default=20)
     parser.add_argument("--batch-size", type=int, default=64)
     parser.add_argument("--seeds", type=int, nargs="+", default=(17, 42, 2026))
+    parser.add_argument("--result-dir", type=Path, help="Separate output directory for new audited reruns")
+    parser.add_argument("--audit-dir", type=Path, help="Fit histories and role predictions (default: result-dir/training_audit)")
     args = parser.parse_args()
 
     feature_dir = args.project_root / "artifacts" / "v3" / "features" / args.dataset
-    result_dir = args.project_root / "artifacts" / "v3" / "results"
+    result_dir = args.result_dir or args.project_root / "artifacts" / "v3" / "results"
+    audit_dir = args.audit_dir or result_dir / 'training_audit'
     result_dir.mkdir(parents=True, exist_ok=True)
     X = np.load(feature_dir / "sequences.npz")["X"]
     index = pd.read_csv(feature_dir / "sequence_index.csv")
@@ -87,6 +90,7 @@ def main() -> None:
             patience=args.patience,
             batch_size=args.batch_size,
             model_ids=(model_id,),
+            audit_dir=audit_dir,
         )
         if not metrics.empty and "model" in metrics:
             metrics = metrics[metrics["model"] != model_id]

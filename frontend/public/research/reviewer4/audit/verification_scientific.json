@@ -1,0 +1,17 @@
+{
+  "nasa_split_roles": 45,
+  "disjoint_nasa_folds": 15,
+  "paired_control_fits": 126,
+  "representative_control_refits": 6,
+  "original_deep_fit_records": 420,
+  "secondary_validation_test_fits": 150,
+  "recomputed_permutation_intervals": 44,
+  "bootstrap_unit": "battery, conditional on fitted predictions",
+  "wilcoxon_comparisons": 19,
+  "wilcoxon_units": 30,
+  "metric_estimands_models": 20,
+  "figures": 27,
+  "exports": 81,
+  "vector_exports_have_embedded_rasters": false,
+  "source_manuscripts_unchanged": true
+}

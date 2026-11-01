@@ -1,0 +1,4 @@
+Dataset,Cell specification,Cells,Cycles,SOH range (%)
+NASA PCoE,18650; 2 Ah,30,2141,56.97–116.60
+CALCE CS2,LCO prismatic; 1.1 Ah,4,3789,26.38–100.12
+Oxford,Kokam pouch; 0.74 Ah,8,519,62.80–101.24

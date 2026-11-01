@@ -1,0 +1,7 @@
+Protocol,Features,MAE,RMSE,R²,Within 5 pp (%)
+v1 random cycle,legacy target proxies,0.068,0.317,0.999,99.8
+v1 random cycle,safe partial cycle,0.732,1.632,0.972,98.5
+v2 chronological,legacy target proxies,0.434,1.375,0.983,97.3
+v2 chronological,safe partial cycle,2.576,4.129,0.843,88.5
+v3 grouped battery,legacy target proxies,0.436,1.056,0.979,98.1
+v3 grouped battery,safe partial cycle,4.145,5.958,0.261,76.5

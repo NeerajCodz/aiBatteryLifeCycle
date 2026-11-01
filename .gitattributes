@@ -1,0 +1,3 @@
+# Preserve exact exported research bytes across Windows/Linux checkouts so
+# the publication manifest's SHA-256 values also match deployed downloads.
+frontend/public/research/reviewer4/** -text -diff

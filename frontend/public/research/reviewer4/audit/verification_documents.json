@@ -1,0 +1,14 @@
+{
+  "baseline_nonempty_paragraphs": 445,
+  "revised_nonempty_paragraphs": 716,
+  "unexplained_baseline_paragraph_losses": 0,
+  "explicit_paragraph_replacements": 13,
+  "original_author_block_and_tables_preserved": true,
+  "figures": 27,
+  "tables": 9,
+  "references": 26,
+  "reviewer_comments_addressed": 13,
+  "caption_image_identity_verified": true,
+  "source_manuscripts_unchanged": true,
+  "visual_review_required": true
+}

@@ -1,0 +1,5 @@
+Proxy,Exact calculation,Unit,Window and boundary
+Current retention,Qk / Qref,Fraction,Current retained row; exactly yk / 100
+Current cumulative capacity,Σj=1..k Qj,Ah,Expanding sum including current retained row
+Current capacity difference,Qk − Qk−1,Ah,Previous retained row; first row is zero
+Current SOH rolling mean,"mean(yj), j = max(1,k−4)..k",SOH %,"Trailing five retained rows, current included; minimum one"

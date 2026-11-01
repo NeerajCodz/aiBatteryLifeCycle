@@ -12,6 +12,18 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and [Sem
 
 ---
 
+## Reviewer 4 application revision — 2026-11-01
+
+- Publish the complete SOH/leakage-audit paper, all 27 vector figures, nine
+  manuscript tables, reviewer response, supplement and hashed audit records.
+- Export complete monitored-loss histories, executed and best epochs, split
+  identities, normalization and validation predictions for new sequence fits.
+  Separate result directories preserve archived scientific results.
+- Correct causal protocol wording, aggregation definitions, frozen transfer
+  preprocessing, battery-level inference and temperature-ablation interpretation.
+- Retain the current SOH API/model contract. Original missing validation
+  histories remain disclosed; secondary diagnostics do not replace them.
+
 ## [2.0.0] — 2026-02-25 — Historical Release
 
 ### Major Features

@@ -12,6 +12,7 @@ import {
   GanttChart, ImageIcon, X, FileText,
 } from "lucide-react";
 import { fetchMetrics, fetchVersionFiguresManifest, type FigureManifestItem, type PaperFigureArtifact, type PaperTable } from "../api";
+import ReviewerRevisionAssets from "./ReviewerRevisionAssets";
 
 interface MetricsData {
   version?: string;
@@ -1097,7 +1098,8 @@ export default function MetricsPanel({ apiVersion = "v3" }: Props) {
       )}
 
       {/* ═══════ PAPER ASSETS ═══════ */}
-      {activeSection === "paper" && (
+      {activeSection === "paper" && activeVersion === "v3" && <ReviewerRevisionAssets />}
+      {activeSection === "paper" && activeVersion !== "v3" && (
         <div className="space-y-6">
           {hasPaperAssets ? (
             <>

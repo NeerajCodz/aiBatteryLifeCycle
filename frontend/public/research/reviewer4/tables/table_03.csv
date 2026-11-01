@@ -1,0 +1,21 @@
+Model,NASA grouped,CALCE grouped,Oxford grouped,NASA to CALCE,NASA to Oxford
+Extra Trees,4.15,1.26,0.66,9.33,4.69
+Gradient Boosting,3.96,1.29,0.80,8.25,5.91
+Random Forest,3.83,1.25,0.63,8.44,5.09
+XGBoost,3.96,1.21,0.84,7.86,4.62
+LightGBM,3.86,1.22,0.66,7.82,5.27
+Support Vector Regression,3.75,2.83,2.09,17.37,7.34
+Ridge Regression,5.84,1.55,0.74,29.31,478.83
+K-Nearest Neighbours,4.77,1.74,1.54,13.17,5.85
+Vanilla LSTM,7.55,6.25,4.42,13.91,8.95
+Bidirectional LSTM,6.74,5.76,3.83,14.13,9.87
+GRU,7.60,3.24,3.14,14.34,8.48
+Attention LSTM,7.94,3.88,5.62,14.17,9.86
+BatteryGPT,8.40,5.19,4.03,12.98,9.81
+Temporal Fusion Transformer,7.35,4.22,4.55,16.64,8.25
+iTransformer,6.87,4.69,1.49,19.97,7.45
+Physics-Informed iTransformer,6.99,5.13,1.29,20.41,8.05
+Dynamic-Graph iTransformer,6.39,4.54,3.23,16.68,8.44
+VAE-LSTM,7.49,6.46,4.70,14.46,11.02
+Stacking Ensemble,4.00,1.15,0.88,13.17,30.26
+Weighted Average Ensemble,3.68,1.29,0.69,6.95,51.87

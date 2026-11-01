@@ -1,0 +1,18 @@
+{
+  "scientific_checks_passed": true,
+  "document_checks_passed": true,
+  "independent_review": "No material findings; all 13 comments and scientific qualifications verified.",
+  "visually_inspected_pages": {
+    "manuscript": 24,
+    "response": 4,
+    "supplement": 6
+  },
+  "visual_review": "Every manuscript, response and supplement page inspected; final table and heading layout, figures, captions and equation subscripts checked.",
+  "deliverables": {
+    "final_mdp_r4.docx": "faf786321a8e9e57cb732c0ab1833565752ce289f2282f50e012f5db42829cca",
+    "final_mdp_r4.pdf": "9278a0abba1ee8320a90c63d45e21802e5b841c7a0977494b53458c497c3c00c",
+    "response_to_reviewer4.docx": "d95975d410ba8284426a3afafae91c967b0128965007a32c581fe45c3df9b410",
+    "reviewer4_reproducibility_supplement.docx": "5fb4fb06e0df99548f146cfa4fd9477ff6a0052b0c0c5a2073dc9b6e4f3819bf"
+  },
+  "remaining_provenance_limit": "Original validation histories and restored-best-epoch identifiers were not recoverable; disclosed in manuscript and response R4.10."
+}

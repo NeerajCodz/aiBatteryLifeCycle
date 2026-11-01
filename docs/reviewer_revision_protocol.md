@@ -26,9 +26,12 @@ The pre-review v3 state is preserved by the annotated tag
 ## Quantitative v1/v2/v3 audit
 
 `scripts/run_protocol_comparison.py` crosses three split designs with a safe
-feature contract and a reconstructed legacy target-proxy contract. This
-separates the impact of the split from the impact of leakage and prevents the
-revision from explaining the old score qualitatively.
+feature contract and a reconstructed legacy target-proxy contract. These are
+descriptive contrasts, not a causal decomposition: training counts, exposure
+composition and test populations differ. Reviewer 4 adds 126 paired fits with
+common training counts and temperature quotas. Even those controls do not make
+the cross-protocol test populations exchangeable. Exact definitions, records
+and limitations are in [the Reviewer 4 contract](reviewer4_revision.md).
 
 ## Reproducibility outputs
 

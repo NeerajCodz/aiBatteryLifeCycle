@@ -1,9 +1,11 @@
 import { useState, useEffect } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import ReviewerRevisionAssets from "./ReviewerRevisionAssets";
 
 // Custom component overrides for proper dark-theme rendering
 const mdComponents: React.ComponentProps<typeof ReactMarkdown>["components"] = {
+  img: ({ src, alt }) => <img src={src} alt={alt ?? "Manuscript figure"} loading="lazy" className="w-full bg-white rounded-lg my-5" />,
   // ── Headings ──────────────────────────────────────────────────────────
   h1: ({ children }) => (
     <h1 className="text-3xl font-bold text-white mt-8 mb-4 pb-3 border-b border-gray-700 leading-tight">
@@ -73,7 +75,7 @@ const mdComponents: React.ComponentProps<typeof ReactMarkdown>["components"] = {
   // ── Tables ────────────────────────────────────────────────────────────
   table: ({ children }) => (
     <div className="overflow-x-auto my-6 rounded-xl border border-gray-700">
-      <table className="w-full text-sm">{children}</table>
+      <table className="w-full min-w-[600px] text-sm">{children}</table>
     </div>
   ),
   thead: ({ children }) => (
@@ -126,9 +128,9 @@ const mdComponents: React.ComponentProps<typeof ReactMarkdown>["components"] = {
 };
 
 // ── Fallback content when file not available ──────────────────────────────
-const FALLBACK = `# Reviewer-revision study: battery SOH prediction
+const FALLBACK = `# State of Health Estimation and Target Leakage Auditing for Lithium Ion Batteries
 
-**Status:** Full benchmark rerun in progress. Final claims are generated from versioned artifacts after all validation stages complete.
+**Status:** Reviewer 4 revision, 1 November 2026. The full manuscript text could not be loaded; use the verified PDF download above.
 
 ---
 
@@ -164,7 +166,7 @@ export default function ResearchPaper() {
           const r = await fetch(src);
           if (!r.ok) continue;
           const md = await r.text();
-          if (md && md.trim().length > 0) {
+          if (md.trimStart().startsWith("# ")) {
             setMarkdown(md);
             setLoading(false);
             return;
@@ -202,7 +204,7 @@ export default function ResearchPaper() {
           </div>
           <div className="flex-1">
             <div className="flex items-center gap-3">
-              <h2 className="text-xl font-bold text-white">IEEE Research Paper</h2>
+              <h2 className="text-xl font-bold text-white">Research Paper · Reviewer 4</h2>
               {usedFallback && (
                 <span className="text-xs px-2 py-0.5 bg-yellow-900/40 text-yellow-400 rounded-full border border-yellow-800">
                   Preview
@@ -214,24 +216,27 @@ export default function ResearchPaper() {
             </p>
           </div>
           <a
-            href="/research_paper.md"
-            download="research_paper.md"
+            href="/research/reviewer4/final_mdp_r4.pdf"
+            target="_blank"
+            rel="noopener noreferrer"
             className="shrink-0 text-xs px-3 py-1.5 rounded-lg bg-gray-800 hover:bg-gray-700 text-gray-300 hover:text-white border border-gray-700 transition-colors"
           >
-            ↓ Download
+            Open PDF ↗
           </a>
         </div>
       </div>
 
+      <div className="mb-6"><ReviewerRevisionAssets compact /></div>
+
       {/* Content */}
-      <div className="bg-gray-900 rounded-xl border border-gray-800 p-8">
+      <div className="bg-gray-900 rounded-xl border border-gray-800 p-4 sm:p-8">
         {loading ? (
           <div className="flex flex-col items-center justify-center py-20 gap-4">
             <div className="w-10 h-10 rounded-full border-2 border-purple-400 border-t-transparent animate-spin" />
             <span className="text-gray-400 text-sm">Loading research paper…</span>
           </div>
         ) : (
-          <article>
+          <article className="min-w-0 [overflow-wrap:anywhere]">
             <ReactMarkdown
               remarkPlugins={[remarkGfm]}
               components={mdComponents}

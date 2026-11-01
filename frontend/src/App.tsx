@@ -13,7 +13,7 @@ import { BatteryCharging } from "lucide-react";
 type Tab = "simulation" | "predict" | "graphs" | "recommend" | "metrics" | "paper";
 
 export default function App() {
-  const [activeTab, setActiveTab] = useState<Tab>("simulation");
+  const [activeTab, setActiveTab] = useState<Tab>("predict");
   const [apiVersion, setVersion] = useState<"v1" | "v2" | "v3">(getApiVersion());
 
   const handleVersionChange = (v: "v1" | "v2" | "v3") => {
@@ -44,25 +44,25 @@ export default function App() {
     <div className="min-h-screen bg-gray-950 text-white">
       {/* Header */}
       <header className="border-b border-gray-800 bg-gray-900/80 backdrop-blur-sm sticky top-0 z-50">
-        <div className="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between">
+        <div className="max-w-7xl mx-auto px-4 py-3 flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
           <div className="flex items-center gap-3">
             <div className="w-8 h-8 rounded bg-green-500/20 flex items-center justify-center">
               <BatteryCharging className="w-5 h-5 text-green-400" />
             </div>
             <h1 className="text-lg font-bold">AI Battery Lifecycle Predictor</h1>
           </div>
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-3 w-full xl:w-auto min-w-0">
             {/* Version selector with submenu */}
             <VersionSelector
               activeVersion={apiVersion}
               onSwitch={handleVersionChange}
             />
-            <nav className="flex gap-1">
+            <nav className="flex gap-1 overflow-x-auto min-w-0" aria-label="Application sections">
             {tabs.map((t) => (
               <button
                 key={t.key}
                 onClick={() => setActiveTab(t.key)}
-                className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors whitespace-nowrap ${
                   activeTab === t.key
                     ? "bg-green-600 text-white"
                     : "text-gray-400 hover:text-white hover:bg-gray-800"

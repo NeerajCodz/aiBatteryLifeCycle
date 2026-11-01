@@ -1,0 +1,11 @@
+Model,Executed epochs min / median / max,Train MAE,Test MAE,Test − train
+Attention LSTM,21 / 45 / 94,4.922,8.171,3.249
+BatteryGPT,22 / 39 / 99,4.275,8.475,4.200
+Bidirectional LSTM,21 / 52 / 89,4.468,6.930,2.463
+Dynamic-Graph iTransformer,21 / 44 / 91,3.161,6.800,3.639
+GRU,21 / 32 / 85,5.963,7.619,1.656
+iTransformer,21 / 39 / 56,3.231,7.295,4.065
+Physics-Informed iTransformer,21 / 33 / 78,3.497,7.533,4.036
+Temporal Fusion Transformer,21 / 53 / 120,4.547,7.658,3.110
+VAE-LSTM,25 / 56 / 116,4.134,7.790,3.656
+Vanilla LSTM,22 / 28 / 52,5.854,7.494,1.640

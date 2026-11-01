@@ -1,0 +1,7 @@
+Family,Count,Included information,Rationale
+Usage and duration,3,Cycle index; prior equivalent full cycles; segment duration,Exposure and elapsed usage available by segment completion
+Voltage shape,6,"Start, end, mean, standard deviation, linear slope, quadratic curvature",Partial-discharge shape and polarization-sensitive summaries
+Current loading,2,Mean and standard deviation of absolute C-rate,"Loading normalized by published rated Ah, not measured Qk"
+Partial energy,1,"Σ |Ii| Vi max(Δti,0) / 3600",Energy inside the partial segment only; not full capacity
+Thermal context,6,"Ambient, mean, standard deviation, range, slope, observation indicator","Exposure, within-segment heating and missingness; not causal degradation"
+Sequence representation,64 × 5,"Normalized time, voltage, absolute C-rate, temperature, observation indicator",Linear resampling of the same completed partial segment

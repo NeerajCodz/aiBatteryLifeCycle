@@ -1,131 +1,70 @@
-# Deployment Guide
+# Application deployment
 
-## Local Development
+Canonical source: https://github.com/neerajcodz/aiBatterylifecycle.
+Existing Docker Space: https://huggingface.co/spaces/NeerajCodz/aiBatteryLifeCycle.
+App: https://neerajcodz-aibatterylifecycle.hf.space.
 
-### Backend
+## Local verification
+
+From the repository root:
+
 ```bash
-cd aiBatteryLifecycle
-.\venv\Scripts\activate          # Windows
-source venv/bin/activate          # Linux/Mac
-
-uvicorn api.main:app --host 0.0.0.0 --port 7860 --reload
-```
-
-### Frontend (dev mode)
-```bash
+python -m pytest -q
 cd frontend
-npm install
-npm run dev
-```
-
-Frontend proxies `/api/*` to `localhost:7860` in dev mode.
-
-### Frontend (production build)
-```bash
-cd frontend
+npm ci
 npm run build
+cd ..
+uvicorn api.main:app --host 127.0.0.1 --port 7860
 ```
 
-Built files go to `frontend/dist/` and are served by FastAPI.
+FastAPI serves `frontend/dist` with the API. `/health` reports process health;
+`/api/versions` reports asynchronous model readiness; `/docs` describes the API.
+A healthy process may still be downloading models. `/api/v3/predict` estimates
+current-cycle SOH; `/api/predict` is its alias. v1/v2 remain legacy.
 
----
-
-## Docker
-
-### Build
-```bash
-docker build -t battery-predictor .
-```
-
-### Run
-```bash
-docker run -p 7860:7860 battery-predictor
-```
-
-### Build stages
-1. **frontend-build:** `node:20-slim` — installs npm deps and builds React SPA
-2. **runtime:** `python:3.11-slim` — installs Python deps, copies source and built frontend
-
-### Docker Compose (recommended)
+## Docker and models
 
 ```bash
-# Production — single container (frontend + API)
-docker compose up --build
-
-# Development — backend only with hot-reload  
-docker compose --profile dev up api-dev
-# then separately:
-cd frontend && npm run dev
+docker build -t battery-soh .
+docker run --rm -p 7860:7860 battery-soh
 ```
 
-### Environment Variables
+The build uses Node 20 and Python 3.12, CPU Torch/TensorFlow, and port 7860.
+Startup downloads metadata and selected v3 models from the existing
+`NeerajCodz/aiBatteryLifeCycle` model repository. Do not replace that release
+with secondary audit fits. Existing manifest model defaults are retained.
 
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `LOG_LEVEL` | `INFO` | Logging verbosity (`DEBUG` / `INFO` / `WARNING` / `ERROR`) |
-| `WORKERS` | `1` | Uvicorn worker count |
+## Reviewer 4 research release
 
----
+`frontend/public/research/reviewer4/` is included in the Vite build: exact
+verified manuscript, response and supplement PDFs, all 27 vector SVG/PDF
+figures, nine CSV manuscript tables, supporting audit tables and hashed
+manifest. Editable Word and 600-dpi PNG files remain in the enclosing review
+archive. Research displays the full paper; v3 Metrics → Paper Assets displays
+the same figure set. These assets do not depend on model downloads.
 
-## Hugging Face Spaces
-
-### Setup
-1. Create a new Space on Hugging Face (SDK: Docker)
-2. Push the repository to the Space
-3. The Dockerfile exposes port 7860 (HF Spaces default)
-
-### Dockerfile Requirements
-- Must expose port **7860**
-- Must respond to health checks at `/health`
-- Keep image size manageable (use CPU-only PyTorch/TF)
-
-### Files to include
-```
-Dockerfile
-requirements.txt
-api/
-src/
-frontend/               # Vite builds during Docker image creation
-cleaned_dataset/
-artifacts/v1/            # v1 model checkpoints (legacy)
-artifacts/v2/            # v2 model checkpoints (recommended)
-artifacts/models/        # Root-level models (backward compat)
+```bash
+python scripts/publish_reviewer4.py --review-root ../paper/revision-2026-11-r4
 ```
 
-### HuggingFace Space URL
-```
-https://huggingface.co/spaces/NeerajCodz/aiBatteryLifeCycle
-```
+## Release to the existing Space
 
-### Space configuration (README.md header)
-```yaml
----
-title: AI Battery Lifecycle Predictor
-emoji: 🔋
-colorFrom: green
-colorTo: blue
-sdk: docker
-pinned: false
-app_port: 7860
----
+Use the configured remotes and ordinary fast-forward pushes:
+
+```bash
+git remote -v
+git push origin HEAD:main
+git push space HEAD:main
 ```
 
----
+Observe the Docker build/runtime until `RUNNING`. If manually paused, resume
+with authenticated `HfApi.restart_space` or Space settings. Keep the existing
+hardware choice. Credentials stay in the credential store or environment.
+Verify the deployed commit, `/health`, `/api/versions`, research manifest and
+PDF, a figure and a valid 18-feature SOH prediction; inspect desktop/mobile
+research navigation. A successful push alone does not verify deployment.
 
-## Production Considerations
-
-### Performance
-- Use `--workers N` for multi-core deployment
-- Enable GPU passthrough for deep model inference: `docker run --gpus all`
-- Consider preloading all models (not lazy loading)
-
-### Security
-- Set `CORS_ORIGINS` to specific domains in production
-- Add authentication middleware if needed
-- Use HTTPS reverse proxy (nginx, Caddy)
-
-### Monitoring
-- Health endpoint: `/health`
-- Logs: JSON-per-line rotating log at `artifacts/logs/battery_lifecycle.log` (10 MB × 5 backups)
-  — set `LOG_LEVEL=DEBUG` for verbose output, mount volume to persist across container restarts
-- Metrics: Add Prometheus endpoint if needed
+Runtime: `LOG_LEVEL=INFO`, one Uvicorn worker, port 7860. Logs rotate under
+`artifacts/logs/battery_lifecycle.log`. Predictions still exclude current
+capacity/SOH and rolling target proxies. Recommendations and simulations
+remain exploratory prototypes.
