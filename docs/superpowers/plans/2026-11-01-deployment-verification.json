@@ -1,0 +1,30 @@
+{
+  "source_commit": "8c766a5a4e4d8a6106ac04a6daed7237d6e22b62",
+  "space_commit": "0b9a6ce45be2d0a7a83ce8ade1b35995cda351c6",
+  "runtime": "RUNNING",
+  "tests_passed": 130,
+  "frontend_build_passed": true,
+  "independent_code_review": "No blocking findings",
+  "figures": 27,
+  "tables": 9,
+  "download_assets_sha256_verified": 92,
+  "default_model": "svr",
+  "gradient_boosting_loaded": true,
+  "gradio_version": "4.44.1",
+  "live_prediction_check": {
+    "soh_pct": 93.53,
+    "model_used": "svr",
+    "rul_cycles": null,
+    "confidence_lower": null,
+    "confidence_upper": null
+  },
+  "spaces": {
+    "NeerajCodz/ObjectDetection": "PAUSED",
+    "NeerajCodz/image-captcha-solver": "PAUSED",
+    "NeerajCodz/creditCardFraudDetection": "PAUSED",
+    "NeerajCodz/rag-slack": "PAUSED",
+    "NeerajCodz/aiMathQuestionClassification": "PAUSED",
+    "NeerajCodz/aiBatteryLifeCycle": "RUNNING",
+    "NeerajCodz/scrapeRL": "PAUSED"
+  }
+}

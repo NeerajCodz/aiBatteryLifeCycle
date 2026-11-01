@@ -16,3 +16,13 @@
 - Deployment authorization: user's request to change code/docs and deploy the
   existing application. Target is the already-configured Space; no new hosting
   account, hardware upgrade or model retraining is part of this release.
+
+## Final live verification
+
+All 130 tests passed after the startup fixes; the frontend production build
+passed. Hugging Face source 0b9a6ce serves application source 8c766a5. All 92
+manifested downloads matched SHA-256, with 27 figures and nine tables. SVR is
+loaded and default, Gradient Boosting loads, Gradio 4.44.1 returns valid config,
+and live SOH prediction succeeds without invented RUL or interval fields.
+The user requested stopping all other Spaces; all six are verified PAUSED.
+See 2026-11-01-deployment-verification.json for the immutable verification event.

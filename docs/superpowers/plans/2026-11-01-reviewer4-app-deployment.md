@@ -10,6 +10,6 @@ The user authorized code, documentation and deployment. Use the existing React/F
 - [x] Publish the verified Reviewer 4 PDF, response, supplement, all 27 vector figures and machine-readable audit tables as a versioned static research bundle with source hashes. Add the corresponding research view and downloadable assets; label the three metric aggregations and original versus secondary diagnostics explicitly.
 - [x] Update README, research/protocol/model/deployment documentation and changelog, including exact proxy definitions, frozen preprocessing, inference units and limitations. Include a portable copy of the revision analysis entry point.
 - [x] Run focused and full regression tests, frontend production build and a fresh code review. Check the actual research page in the browser.
-- [ ] Commit the tested changes, push the canonical repository and existing Space, wait for its build, and verify the deployed commit, health, research assets and SOH endpoint.
+- [x] Commit the tested changes, push the canonical repository and existing Space, wait for its build, and verify the deployed commit, health, research assets and SOH endpoint.
 
 Review focus: no target-derived API inputs; no pooled metric presented as battery-macro MAE; no archived best epochs invented; no missing-class or four-cell uncertainty concealed; no lost previous figure topics.
