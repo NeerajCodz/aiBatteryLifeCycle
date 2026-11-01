@@ -23,6 +23,9 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and [Sem
   preprocessing, battery-level inference and temperature-ablation interpretation.
 - Retain the current SOH API/model contract. Original missing validation
   histories remain disclosed; secondary diagnostics do not replace them.
+- Ensure startup loads the manifest default SVR and constrain inference
+  dependencies to versions compatible with the existing serialized release
+  and Gradio 4. No model files are retrained or replaced.
 
 ## [2.0.0] — 2026-02-25 — Historical Release
 

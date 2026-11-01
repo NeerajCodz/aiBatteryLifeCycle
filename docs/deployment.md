@@ -30,6 +30,11 @@ docker run --rm -p 7860:7860 battery-soh
 ```
 
 The build uses Node 20 and Python 3.12, CPU Torch/TensorFlow, and port 7860.
+`constraints-deployment.txt` locks scikit-learn 1.8.0 to match the serialized
+model release and Hub client 0.36.0 for Gradio 4 compatibility. This deployment
+environment is separate from the scientific analysis environment. Startup
+always includes the manifest's declared default model within its three-model
+download budget, then fills the remaining positions by the existing ranking.
 Startup downloads metadata and selected v3 models from the existing
 `NeerajCodz/aiBatteryLifeCycle` model repository. Do not replace that release
 with secondary audit fits. Existing manifest model defaults are retained.

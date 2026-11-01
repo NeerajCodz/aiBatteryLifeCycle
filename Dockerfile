@@ -31,10 +31,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # Install torch CPU-only and tensorflow-cpu FIRST so requirements.txt
 # finds them already satisfied (avoids downloading 3+ GB of CUDA deps)
 COPY requirements.txt .
+COPY constraints-deployment.txt .
 RUN pip install --upgrade pip && \
     pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu && \
     pip install tensorflow-cpu && \
-    pip install -r requirements.txt
+    pip install -r requirements.txt -c constraints-deployment.txt
 
 # Ensure writable artifact directories exist
 RUN mkdir -p artifacts/v1/models/classical artifacts/v1/models/deep \

@@ -1,0 +1,6 @@
+# Serialized v3 release models were produced with scikit-learn 1.8.0.
+# Newer versions cannot reliably load that release's GradientBoosting loss.
+scikit-learn==1.8.0
+
+# Gradio 4 uses HfFolder, which is absent in the 1.x/2.x Hub client.
+huggingface-hub==0.36.0

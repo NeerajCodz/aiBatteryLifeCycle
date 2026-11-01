@@ -172,12 +172,14 @@ def _model_score(info: dict) -> float:
 
 
 def select_top_models(version: str, top_k: int = DEFAULT_STARTUP_TOP_MODELS) -> list[str]:
-    """Pick top-k concrete models from models.json by best available metric score.
+    """Load the declared default plus ranked concrete models within a fixed budget.
 
     Excludes virtual entries without a model file.
     """
     meta = _read_models_meta(version)
     models = meta.get("models", {}) if isinstance(meta, dict) else {}
+    if top_k <= 0:
+        return []
     scored: list[tuple[float, str]] = []
     for name, info in models.items():
         if not isinstance(info, dict):
@@ -188,7 +190,11 @@ def select_top_models(version: str, top_k: int = DEFAULT_STARTUP_TOP_MODELS) -> 
         if score != float("-inf"):
             scored.append((score, name))
     scored.sort(key=lambda x: x[0], reverse=True)
-    return [name for _, name in scored[:top_k]]
+    ranked = [name for _, name in scored]
+    default = meta.get('default_model') if isinstance(meta, dict) else None
+    if isinstance(models.get(default), dict) and models[default].get('file'):
+        ranked = [default] + [name for name in ranked if name != default]
+    return ranked[:top_k]
 
 
 def _collect_model_patterns(version: str, model_names: list[str]) -> list[str]:
